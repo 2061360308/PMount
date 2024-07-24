@@ -1,0 +1,10 @@
+colorama
+browser_cookie3
+termcolor
+requests
+pytest
+diskcache
+fusepy
+
+urllib3
+easydict
