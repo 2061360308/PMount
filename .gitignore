@@ -43,6 +43,9 @@ cache/**
 learn/**
 .vscode/**
 .idea/**
+crash/*
 test.data
 
+drivers/BaiduNetdisk/config.json
 config/config.json
+crash/**

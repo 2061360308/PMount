@@ -9,26 +9,25 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import json
 import logging
-from config import configManager
 from easydict import EasyDict
 
 
 class BaiduNetdisk:
-    def __init__(self, debug=False):
+    def __init__(self, config, debug=False):
         self.DEBUG = debug
-
+        self.config = config
         self.check_access_token()
-        self.client_id = configManager.config.client_id
-        self.client_secret = configManager.config.client_secret
-        self.access_token = configManager.config.access_token
-        self.refresh_token = configManager.config.refresh_token
+        self.client_id = config.client_id
+        self.client_secret = config.client_secret
+        self.access_token = config.access_token
+        self.refresh_token = config.refresh_token
 
         self.session = requests.Session()
         retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
         self.session.mount('https://', HTTPAdapter(max_retries=retries))
 
     def check_access_token(self):
-        if time.time() - configManager.config.access_token_time > 1728000:
+        if time.time() - self.config.access_token_time > 1728000:
             self.refresh_access_token()
 
     def _refresh_token(self):
@@ -53,10 +52,11 @@ class BaiduNetdisk:
             return Exception("EmptyToken")
         self.access_token = data["access_token"]
         self.refresh_token = data["refresh_token"]
-        print(self.access_token, self.refresh_token)
+        # print(self.access_token, self.refresh_token)
         # Save tokens for persistence
-        configManager.update_config("access_token", self.access_token)
-        configManager.update_config("refresh_token", self.refresh_token)
+        self.config.access_token = self.access_token
+        self.config.refresh_token = self.refresh_token
+        self.config.access_token_time = time.time()
         return None
 
     def refresh_access_token(self):
@@ -529,6 +529,7 @@ class BaiduNetdisk:
         session = requests.Session()
         # 拼接access_token到url
         url = f'{url}&access_token={self.access_token}'
+        return url  # 直接返回url
         print(url)
         # 发送 HEAD 请求
         response = session.head(url, allow_redirects=False, headers={'User-Agent': 'pan.baidu.com'})
@@ -546,6 +547,7 @@ class BaiduNetdisk:
         
         """
         res_url = self.files(fsids, dlink=1).list[0].dlink
+        # return res_url
         return self.get_final_download_link(res_url)
 
     def path_to_fsid(self, path):
@@ -559,11 +561,28 @@ class BaiduNetdisk:
 
         return fsid
 
-
-baiduNetdiskApi = BaiduNetdisk(True)
+    def get_m3u8(self, path, definition_type=1080):
+        """
+        获取m3u8文件
+        :param definition_type: 清晰度类型，1080、720、480
+        :param path:
+        :return:
+        """
+        definition_type = " M3U8_AUTO_" + str(definition_type)
+        params = {
+            "method": "streaming",
+            "path": path,
+            "type": definition_type,
+            "nom3u8": 0
+        }
+        response = self.get("/xpan/file", params)
+        return response.text
 
 if __name__ == '__main__':
     baidu_netdisk = BaiduNetdisk(True)
-    user_info = baidu_netdisk.get_res_url("219082268519932")
-    print("user_info::")
+    # baidu_netdisk.refresh_access_token()
+    user_info = baidu_netdisk.get_m3u8("/计算机组成原理 6小时突击课/课时7 CPU的结构和功能 .mp4")
+    # print("user_info::")
     pprint(user_info)
+    with open("x.m3u8", 'w+', encoding='utf-8') as f:
+        f.write(user_info)
