@@ -6,39 +6,20 @@ import os
 import json
 import time
 
-from easydict import EasyDict
-
 try:
     import _find_fuse_parts
 except ImportError:
     pass
 from fuse import FuseOSError, Operations
-# from winfspy import FileSystem, BaseFileSystemOperations
 from termcolor import colored
-from concurrent.futures import ThreadPoolExecutor as Pool
 from internal.log import get_logger, funcLog
 from internal.dir_info import dirInfoManager
 from internal.driver import drivers_obj
+from internal.temp_fs import tempFs
 
 encrpted_length = 512
 
 logger = get_logger(__name__)
-
-fileAttr = {
-    'bd_fsid': 0,
-    'bd_blocklist': 0,
-    'bd_md5': 0,
-    'st_ino': 0,
-    'st_dev': 0,
-    'st_mode': 0,  # this is a trick point where write file and read file conflict
-    'st_nlink': 0,
-    'st_uid': 0,
-    'st_gid': 0,
-    'st_size': 0,
-    'st_atime': 0,
-    'st_mtime': 0,
-    'st_ctime': 0
-}
 
 PRELOAD_LEVEL = 4
 CACHE_TIMEOUT = 60
@@ -77,12 +58,6 @@ class CloudFS(Operations):
         path = "/"
         if f'{self.name}@@{path}' in dirInfoManager.buffer:
             return dirInfoManager.buffer[f'{self.name}@@{path}']
-
-        # logger.debug(f'net root: {path}')
-
-        f = fileAttr.copy()
-        f["st_mode"] = 16877
-        f["st_nlink"] = 2
 
         file_info = {
             'st_ino': 0,
@@ -131,7 +106,12 @@ class CloudFS(Operations):
             attr = dirInfoManager.buffer[f'{self.name}@@{path}']
 
         if attr is None:
-            raise FuseOSError(errno.ENOENT)
+            if (f'{self.name}@@{path}'.endswith('.lnk')) and (f'{self.name}@@{path}'[:-4] in dirInfoManager.buffer):
+                # 如果是快捷方式文件，需要尝试读取原文件信息
+                original_path = f'{self.name}@@{path}'[:-4]
+                attr = dirInfoManager.buffer[original_path]
+            else:
+                raise FuseOSError(errno.ENOENT)
 
         return attr
 
@@ -160,6 +140,10 @@ class CloudFS(Operations):
         :return:
         """
         dirInfoManager.readDirAsync(self.name, path, PRELOAD_LEVEL)  # 异步读取目录
+
+        # with open('log.txt', 'w+', encoding='utf-8') as f:
+        #     for k in dirInfoManager.dir_buffer.iterkeys():
+        #         f.write(f'{k}: {dirInfoManager.dir_buffer[k]}\n')
 
         if f'{self.name}@@{path}' in dirInfoManager.dir_buffer:  # 在缓存中的话就读取对应缓存内容
             for r in dirInfoManager.dir_buffer[f'{self.name}@@{path}']:
@@ -287,6 +271,23 @@ class CloudFS(Operations):
         dirInfoManager.dir_buffer[directory] = cache
 
         dirInfoManager.add_file_attr(path, r)
+
+    def open(self, path, flags):
+        return 0
+
+    def read(self, path, size, offset, fh):
+        if tempFs.has(self.name, path):
+            file_path = tempFs.get(self.name, path)
+        elif tempFs.has(self.name, path + ".lnk"):
+            file_path = tempFs.get(self.name, path + ".lnk")
+        else:
+            raise FuseOSError(errno.ENOENT)
+        with open(file_path, 'rb') as f:
+            f.seek(offset)
+            return f.read(size)
+
+    def release(self, path, fh):
+        return 0
 
     @funcLog
     def create(self, path, mode, fh=None):

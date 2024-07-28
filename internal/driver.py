@@ -7,9 +7,6 @@ from config import config, DriverConfig
 need_modules = {}
 
 
-# base_paths = []
-
-
 def get_need_module(disk):
     for node in disk:
         need_modules[node.name] = node.type

@@ -1,11 +1,13 @@
 import queue
+import time
 from hashlib import md5 as hashlib_md5
 import os
 
 from config import config
 import shelve
+from diskcache import Cache
 from collections import deque
-import asyncio
+import threading
 
 current_path = os.path.abspath(os.path.dirname(__file__))
 
@@ -17,25 +19,20 @@ class TempFs:
 
     def __init__(self):
         self.root = config.temp.file.ROOT  # 缓存根目录
-        self.max_size = config.temp.file.MAX_SIZE  # 缓存占用最大大小
-        self.timeout = config.temp.file.TIMEOUT  # 缓存超时时间
-        self.meta_file = os.path.join(current_path, '../file_cache_meta.db')  # 缓存元数据文件
+        self.max_size = config.temp.file.MAX_CACHE_SIZE  # 缓存占用最大大小
+        self.timeout = config.temp.file.CACHE_TIMEOUT  # 缓存超时时间
+        self.meta_dir = os.path.join(current_path, '../cache/temp-fs')  # 缓存元数据文件
 
         if not os.path.exists(self.root):
             os.makedirs(self.root)
 
-        if os.path.exists(self.meta_file):
+        if os.path.exists(self.meta_dir):
             # 打开一个 shelve 文件
-            self.meta = shelve.open(self.meta_file)
+            self.meta = Cache(self.meta_dir)
         else:
-            open(self.meta_file, 'w+').close()
-            self.meta = shelve.open(self.meta_file)
+            self.meta = Cache(self.meta_dir)
             self.meta['weight'] = deque()  # 缓存文件的访问权重, 用于淘汰策略
             self.meta['size'] = 0  # 当前缓存占用大小
-
-    def __del__(self):
-        # 关闭 shelve 文件
-        self.meta.close()
 
     @staticmethod
     def generate_key(driver_name, uid):
@@ -68,6 +65,7 @@ class TempFs:
 
         # 利用driver_name和uid生成一个唯一的key
         key = self.generate_key(driver_name, uid)
+
         if key in self.meta:
             raise KeyError(f'key {driver_name} and {uid} already exists')
 
@@ -76,19 +74,19 @@ class TempFs:
             if not suffix.startswith('.'):
                 suffix = '.' + suffix
 
+        self.__create_key(key)  # 创建键
+
         # 生成一个文件路径
         file_path = os.path.join(self.root, key[:2], key[2:4] + suffix)
         # 储存文件元信息
         data = {
             'path': file_path,
             'size': size,
+            'time': time.time(),
         }
         if md5:
             data['md5'] = md5
         self.meta[key] = data
-        weight = self.meta['weight']
-        weight.appendleft(key)
-        self.meta['weight'] = weight
         self.meta['size'] += size
 
         # 创建文件夹
@@ -121,7 +119,9 @@ class TempFs:
         :param key: 缓存文件的 key
         """
         weight = self.meta['weight']
-        weight.remove(key)
+        # print(weight)
+        if key in weight:
+            weight.remove(key)
         weight.appendleft(key)
         self.meta['weight'] = weight
 
@@ -138,11 +138,16 @@ class TempFs:
             raise ValueError('size is too large')
 
         key = self.generate_key(driver_name, uid)
+        if key not in self.meta:
+            raise KeyError(f'key {driver_name} and {uid} not exists')
         self.update_weight(key)  # 更新权重
 
-        self.meta[key]['size'] = size  # 更新文件元信息
+        data = self.meta[key]
+        data['size'] = size  # 更新文件元信息
         if md5:
-            self.meta[key]['md5'] = md5
+            data['md5'] = md5
+        data['time'] = time.time()
+        self.meta[key] = data
         old_size = self.meta[key]['size']
         # 计算差值
         diff = size - old_size
@@ -186,6 +191,39 @@ class TempFs:
             raise KeyError(f'key {driver_name} and {uid} not exists')
         return self.meta[key].get('md5', None)
 
+    def __del_key(self, key):
+        """
+        删除一个键，用来保证同时删除队列中和字典中的信息
+
+        :param key: 缓存文件的 key
+        """
+        if key not in self.meta:
+            raise KeyError(f'key {key} not exists')
+
+        weight = self.meta['weight']
+        weight.remove(key)
+        self.meta['weight'] = weight
+        del self.meta[key]
+
+    def __create_key(self, key):
+        """
+        创建一个键，用来保证同时创建队列中和字典中的信息
+        :param key:
+        :return:
+        """
+        weight = self.meta['weight']
+
+        if key not in weight:
+            weight.appendleft(key)
+            self.meta['weight'] = weight
+
+        if key not in self.meta:
+            self.meta[key] = {
+                'path': None,
+                'size': 0,
+                'time': time.time(),
+            }
+
     def has(self, driver_name: str, uid):
         """
         判断是否存在缓存文件
@@ -196,3 +234,39 @@ class TempFs:
         """
         key = self.generate_key(driver_name, uid)
         return key in self.meta
+
+    def use(self, driver_name: str, uid):
+        """
+        使用缓存文件
+
+        :param driver_name: 存储方案的名称
+        :param uid: 对应的文件的唯一标识符，只要在当前存储方案中唯一即可，可以是文件的路径，或者是文件的 hash 值
+        """
+        key = self.generate_key(driver_name, uid)
+
+        if key not in self.meta:
+            raise KeyError(f'key {driver_name} and {uid} not exists')
+
+        self.update_weight(key)
+        data = self.meta[key]
+        data['time'] = time.time()
+        self.meta[key] = data
+
+    def get(self, driver_name: str, uid):
+        """
+        获取缓存文件的路径
+
+        :param driver_name: 存储方案的名称
+        :param uid: 对应的文件的唯一标识符，只要在当前存储方案中唯一即可，可以是文件的路径，或者是文件的 hash 值
+        :return: 缓存文件的路径
+        """
+        key = self.generate_key(driver_name, uid)
+
+        if key not in self.meta:
+            raise KeyError(f'key {driver_name} and {uid} not exists')
+
+        self.update_weight(key)
+        return self.meta[key]['path']
+
+
+tempFs = TempFs()

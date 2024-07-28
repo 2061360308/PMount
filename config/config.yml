@@ -8,9 +8,9 @@ temp:
     PRELOAD_LEVEL: 2  # 预加载级别
     CACHE_TIMEOUT: 60  # 缓存超时时间
   file:  # 文件缓存
-    ROOT: "E:/BaiduNetdisk/temp"  # 缓存根目录
+    ROOT: "./temp"  # 缓存根目录
     CACHE_TIMEOUT: 6000  # 缓存超时时间
-    MAX_CACHE_SIZE: 1073741824  # 总缓存最大使用磁盘空间
+    MAX_CACHE_SIZE: 10737418240  # 总缓存最大使用磁盘空间
 百度网盘:
   access_token: 121.2692197c2651cd75c5cbfea038413a02.Y7m39lVCjJtnmNyhDo8Mc2mjh5StLTkrZkmWQQe.cYJqQg
   access_token_time: 1721640625.863443
