@@ -12,7 +12,10 @@ class Driver:
         """
         获取容量信息
 
-        :return:
+        返回内容为 EasyDict 对象，
+        包含 total 和 used 两个字段，分别表示总容量和已使用容量
+        二者要求为 int ，且均为字节单位
+        :return:  EasyDict({"total": total, "used": used})
         """
         return self.api.quota()
 

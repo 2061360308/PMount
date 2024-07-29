@@ -23,6 +23,14 @@ class BaiduNetdisk:
         self.refresh_token = config.refresh_token
 
         self.session = requests.Session()
+
+        if self.access_token is None:
+            if self.refresh_token is not None:
+                print("No access token, refreshing")
+                self.refresh_access_token()
+            else:
+                raise Exception("No access token or refresh token")
+
         retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
         self.session.mount('https://', HTTPAdapter(max_retries=retries))
 
@@ -35,6 +43,7 @@ class BaiduNetdisk:
         刷新 access_token
         :return:
         """
+        print("Refreshing access token")
         url = "https://openapi.baidu.com/oauth/2.0/token"
         params = {
             "grant_type": "refresh_token",
@@ -56,6 +65,7 @@ class BaiduNetdisk:
         # Save tokens for persistence
         self.config.access_token = self.access_token
         self.config.refresh_token = self.refresh_token
+        print(self.config.access_token, self.config.refresh_token)
         self.config.access_token_time = time.time()
         return None
 
