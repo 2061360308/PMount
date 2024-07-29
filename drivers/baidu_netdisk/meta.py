@@ -3,24 +3,24 @@ import typing
 meta = {
     'name': '百度网盘',
     'package_name': 'baidu_netdisk',
-    'desc': '百度网盘',
+    'doc_link': '',
     'config': {
-        'DriverRootPath': {
+        'CloudRootPath': {
             'name': 'root_path',
             'desc': '需要挂载的百度网盘的根目录',
             'type': str,
             "default": "/",
         },
-        'LocalRootPath': {
-            'name': 'local_root_path',
+        'LocalMountPath': {
+            'name': 'mount',
             'desc': '本地目录',
             'type': str,
-            "default": "/百度网盘",
             'required': True,
         },
         'RefreshToken': {
             'name': 'refresh_token',
-            'desc': 'Refresh Token, 可以到 https://pan.baidu.com/rest/2.0/xpan/auth获取',
+            'desc': 'Refresh Token, 可以到下方链接获取',
+            'link': 'https://pan.baidu.com/rest/2.0/xpan/auth',
             'type': str,
             'required': True,
         },

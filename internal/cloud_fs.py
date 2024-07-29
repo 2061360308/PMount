@@ -11,7 +11,6 @@ try:
 except ImportError:
     pass
 from fuse import FuseOSError, Operations
-from termcolor import colored
 from internal.log import get_logger, funcLog
 from internal.dir_info import dirInfoManager
 from internal.driver import drivers_obj
@@ -30,7 +29,7 @@ class CloudFS(Operations):
 
     def __init__(self, name, *args, **kw):
         self.name = name
-        logger.info(colored("- fuse 4 cloud driver -", 'red'))
+        logger.info("- fuse 4 cloud driver -")
         self.avail, self.total_size, self.used = self.init_disk_quota()  # 初始化磁盘空间大小
         dirInfoManager.readDirAsync(self.name, "/", PRELOAD_LEVEL)  # 预读根目录(默认深度为2)
 

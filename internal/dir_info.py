@@ -1,17 +1,15 @@
 import math
 import os
-import time
 import winreg
-from concurrent.futures import ThreadPoolExecutor as Pool
-from pprint import pprint
 
 import pythoncom
 import win32com.client
-from diskcache import Cache
 
-from internal.log import get_logger, funcLog
+from internal.log import get_logger
 from internal.driver import drivers_obj
 from internal.temp_fs import tempFs
+from internal.system_res import dir_info_pool, dir_info_buffer, dir_info_dir_buffer, \
+    dir_info_traversed_folder, stop_event
 
 logger = get_logger(__name__)
 
@@ -23,11 +21,11 @@ class DirInfoManager:
     current_path = os.path.abspath(os.path.dirname(__file__))
 
     def __init__(self):
-        self.pool = Pool(10)  # 线程池，用于异步遍历目录
+        self.pool = dir_info_pool  # 线程池，用于异步遍历目录
 
-        self.buffer = Cache(os.path.join(self.current_path, '../cache/buffer-batchmeta'))
-        self.dir_buffer = Cache(os.path.join(self.current_path, '../cache/dir_buffer-buffer-batchmeta'))
-        self.traversed_folder = Cache(os.path.join(self.current_path, '../cache/traversed-folder'))
+        self.buffer = dir_info_buffer  # 缓存文件属性
+        self.dir_buffer = dir_info_dir_buffer  # 缓存目录结构
+        self.traversed_folder = dir_info_traversed_folder  # 缓存已经遍历的目录
 
         self.file_icon = {}  # 文件图标缓存
 
@@ -200,6 +198,9 @@ class DirInfoManager:
         :param depth: 读取深度
         :return:
         """
+        if stop_event.is_set():
+            return
+
         driver = drivers_obj[name]
         if f'{name}@@{path}' not in self.traversed_folder:
             self.traversed_folder.set(f'{name}@@{path}', b'1', expire=CACHE_TIMEOUT)
@@ -280,6 +281,9 @@ class DirInfoManager:
         :param depth: 读取深度
         :return:
         """
+
+        if stop_event.is_set():
+            return
 
         self.pool.submit(self.readDir, name, path, depth)
 

@@ -1,13 +1,11 @@
 import queue
 import time
+from collections import deque
 from hashlib import md5 as hashlib_md5
 import os
 
 from config import config
-import shelve
-from diskcache import Cache
-from collections import deque
-import threading
+from internal.system_res import temp_fs_cache
 
 current_path = os.path.abspath(os.path.dirname(__file__))
 
@@ -21,18 +19,12 @@ class TempFs:
         self.root = config.temp.file.ROOT  # 缓存根目录
         self.max_size = config.temp.file.MAX_CACHE_SIZE  # 缓存占用最大大小
         self.timeout = config.temp.file.CACHE_TIMEOUT  # 缓存超时时间
-        self.meta_dir = os.path.join(current_path, '../cache/temp-fs')  # 缓存元数据文件
 
         if not os.path.exists(self.root):
             os.makedirs(self.root)
 
-        if os.path.exists(self.meta_dir):
-            # 打开一个 shelve 文件
-            self.meta = Cache(self.meta_dir)
-        else:
-            self.meta = Cache(self.meta_dir)
-            self.meta['weight'] = deque()  # 缓存文件的访问权重, 用于淘汰策略
-            self.meta['size'] = 0  # 当前缓存占用大小
+        self.meta = temp_fs_cache  # 缓存文件元信息
+        self.weight = self.build_weight()  # 重建权重队列，用于淘汰策略
 
     @staticmethod
     def generate_key(driver_name, uid):
@@ -43,6 +35,27 @@ class TempFs:
     async def remove_file_sync(file_path):
         if os.path.exists(file_path):
             os.remove(file_path)
+
+    def build_weight(self):
+        """
+        重建权重队列
+        :return:
+        """
+        weight = deque()
+        # 按时间戳升序排序并只保留键
+        # for key in self.meta:
+        #     print("输出：：", key)
+        #     print(key, self.meta[key]['time'], type(self.meta[key]['time']))
+        # print('meta::', self.meta)
+        sorted_keys = sorted(
+            (key for key in self.meta if key != 'size'),
+            key=lambda k: self.meta[k]['time']
+        )
+        # 创建队列，最新的时间戳在最左侧
+        for key in sorted_keys:
+            weight.appendleft(key)
+
+        return weight
 
     def allocate(self, driver_name: str, uid, size: int, suffix: str = "", md5=None) -> str:
         """
@@ -74,7 +87,9 @@ class TempFs:
             if not suffix.startswith('.'):
                 suffix = '.' + suffix
 
-        self.__create_key(key)  # 创建键
+        # 添加到权重队列开头
+        if key not in self.weight:
+            self.weight.appendleft(key)
 
         # 生成一个文件路径
         file_path = os.path.join(self.root, key[:2], key[2:4] + suffix)
@@ -103,9 +118,7 @@ class TempFs:
         :param key: 缓存文件的 key
         :return: 缓存文件的路径
         """
-        weight = self.meta['weight']
-        key = weight.pop()
-        self.meta['weight'] = weight
+        key = self.weight.pop()
 
         file_path = self.meta[key]['path']
         self.remove_file_sync(file_path)
@@ -118,12 +131,14 @@ class TempFs:
 
         :param key: 缓存文件的 key
         """
-        weight = self.meta['weight']
-        # print(weight)
-        if key in weight:
-            weight.remove(key)
-        weight.appendleft(key)
-        self.meta['weight'] = weight
+        # 更新权重队列
+        self.weight.remove(key)
+        self.weight.appendleft(key)
+
+        # 更新时间戳
+        data = self.meta[key]
+        data['time'] = time.time()
+        self.meta[key] = data
 
     def update(self, driver_name: str, uid, size: int, md5=None):
         """
@@ -171,9 +186,7 @@ class TempFs:
 
         self.remove_file_sync(self.meta[key]['path'])
         self.meta['size'] -= self.meta[key]['size']
-        weight = self.meta['weight']
-        weight.remove(key)
-        self.meta['weight'] = weight
+        self.weight.remove(key)
         del self.meta[key]
 
     def get_md5(self, driver_name: str, uid):
@@ -190,39 +203,6 @@ class TempFs:
         if key not in self.meta:
             raise KeyError(f'key {driver_name} and {uid} not exists')
         return self.meta[key].get('md5', None)
-
-    def __del_key(self, key):
-        """
-        删除一个键，用来保证同时删除队列中和字典中的信息
-
-        :param key: 缓存文件的 key
-        """
-        if key not in self.meta:
-            raise KeyError(f'key {key} not exists')
-
-        weight = self.meta['weight']
-        weight.remove(key)
-        self.meta['weight'] = weight
-        del self.meta[key]
-
-    def __create_key(self, key):
-        """
-        创建一个键，用来保证同时创建队列中和字典中的信息
-        :param key:
-        :return:
-        """
-        weight = self.meta['weight']
-
-        if key not in weight:
-            weight.appendleft(key)
-            self.meta['weight'] = weight
-
-        if key not in self.meta:
-            self.meta[key] = {
-                'path': None,
-                'size': 0,
-                'time': time.time(),
-            }
 
     def has(self, driver_name: str, uid):
         """
@@ -248,9 +228,6 @@ class TempFs:
             raise KeyError(f'key {driver_name} and {uid} not exists')
 
         self.update_weight(key)
-        data = self.meta[key]
-        data['time'] = time.time()
-        self.meta[key] = data
 
     def get(self, driver_name: str, uid):
         """

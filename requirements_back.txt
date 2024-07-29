@@ -1,0 +1,6 @@
+pywin32
+easydict
+PySide6
+PySide6-Fluent-Widgets
+fusepy
+diskcache

@@ -1,7 +1,4 @@
 import importlib
-
-from easydict import EasyDict
-
 from config import config, DriverConfig
 
 need_modules = {}

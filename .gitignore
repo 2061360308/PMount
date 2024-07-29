@@ -49,3 +49,4 @@ test.data
 drivers/BaiduNetdisk/config.json
 config/config.json
 crash/**
+output/**
