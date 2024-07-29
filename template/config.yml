@@ -1,0 +1,19 @@
+disk:
+- name: "百度网盘"
+  type: baidu_netdisk
+  mount: "E:/BaiduNetdisk"  # 挂载路径
+  use: true
+temp:
+  dir:  # 目录和元信息缓存
+    PRELOAD_LEVEL: 2  # 预加载级别
+    CACHE_TIMEOUT: 60  # 缓存超时时间
+  file:  # 文件缓存
+    ROOT: "./temp"  # 缓存根目录
+    CACHE_TIMEOUT: 6000  # 缓存超时时间
+    MAX_CACHE_SIZE: 10737418240  # 总缓存最大使用磁盘空间
+百度网盘:
+  access_token:
+  access_token_time:
+  client_id: iYCeC9g08h5vuP9UqvPHKKSVrKFXGa1v
+  client_secret: jXiFMOPVPCWlO2M5CwWQzffpNPaGTRBG
+  refresh_token:
