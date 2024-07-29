@@ -47,6 +47,6 @@ crash/*
 test.data
 
 drivers/BaiduNetdisk/config.json
-config/config.json
+config/config.yml
 crash/**
 output/**

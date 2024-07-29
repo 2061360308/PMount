@@ -1,28 +1,18 @@
 
-<div style="display: flex; align-items: center; justify-content: center; padding: 20px;">
-    <img src="res/logo/logo_256.png" alt="PMount Logo" style="width: 100px; height: 100px; margin-right: 20px;">
-    <div style="font-size: 48px; font-weight: bold;">PMount</div>
+<div style="display: flex; align-items: center; justify-content: center;">
+    <img src="res/logo/logo_256.png" alt="PMount Logo" width="100" height="100">
+    <div style="font-size: 48px; margin-left: 10px;">PMount</div>
 </div>
-<div style="display: flex; justify-content: center; padding: 10px 20px; font-size: 16px; border-bottom: 1px solid #dee2e6;">
+<p align="center" style="font-size: 16px; border-bottom: 1px solid #dee2e6;">
     Python开发的云盘挂载工具，轻量、易用、拓展性强
-</div>
-<div style="display: flex; justify-content: center; padding: 10px 20px;">
-    <a href="#" style="margin: 0 10px;">
-        <img src="https://img.shields.io/badge/python-3.10-blue.svg" alt="sponsor">
-    </a>
-    <a href="#" style="margin: 0 10px;">
-        <img src="https://img.shields.io/badge/platform-windows-green.svg" alt="sponsor">
-    </a>
-    <a href="#" style="margin: 0 10px;">
-        <img src="https://img.shields.io/badge/nuitka-0.6.17-orange.svg" alt="Nuitka">
-    </a>
-    <a href="#" style="margin: 0 10px;">
-        <img src="https://img.shields.io/github/v/release/your-repo/your-project" alt="Latest Release">
-    </a>
-    <a href="#" style="margin: 0 10px;">
-        <img src="https://img.shields.io/badge/License-GPLv3-blue?color=#4ec820" alt="License">
-    </a>
-</div>
+</p>
+<p align="center">
+    <a href="#"><img src="https://img.shields.io/badge/python-3.10-blue.svg" alt="Python"></a>
+    <a href="#"><img src="https://img.shields.io/badge/platform-windows-green.svg" alt="Platform"></a>
+    <a href="#"><img src="https://img.shields.io/badge/nuitka-0.6.17-orange.svg" alt="Nuitka"></a>
+    <a href="#"><img src="https://img.shields.io/github/v/release/your-repo/your-project" alt="Latest Release"></a>
+    <a href="#"><img src="https://img.shields.io/badge/License-GPLv3-blue?color=#4ec820" alt="License"></a>
+</p>
 
 ## 什么是 PMount
 PMount 是一个基于 Python 开发的云盘挂载工具，支持多种云盘，轻量、易用、拓展性强。
