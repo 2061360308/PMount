@@ -1,8 +1,9 @@
 
-<div style="display: flex; align-items: center; justify-content: center;">
+<p align="center">
     <img src="res/logo/logo_256.png" alt="PMount Logo" width="100" height="100">
-    <div style="font-size: 48px; margin-left: 10px;">PMount</div>
-</div>
+    <br>
+    <b style="font-size: 48px;">PMount</b>
+</p>
 <p align="center" style="font-size: 16px; border-bottom: 1px solid #dee2e6;">
     Python开发的云盘挂载工具，轻量、易用、拓展性强
 </p>
