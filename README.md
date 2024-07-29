@@ -2,7 +2,7 @@
 <p align="center">
     <img src="res/logo/logo_256.png" alt="PMount Logo" width="100" height="100">
     <br>
-    <b style="font-size: 48px;">PMount</b>
+    <h1 align="center">PMount</h1>
 </p>
 <p align="center" style="font-size: 16px; border-bottom: 1px solid #dee2e6;">
     Python开发的云盘挂载工具，轻量、易用、拓展性强
