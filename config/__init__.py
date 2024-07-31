@@ -6,6 +6,8 @@ from .driver_config import DriverConfig
 # 更方便的获取配置
 
 update_config = configManager.update_config
+add_device = configManager.add_device
+use_device = configManager.use_device
 
 
 class ConfigWrapper:

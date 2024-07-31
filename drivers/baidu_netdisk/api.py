@@ -16,7 +16,6 @@ class BaiduNetdisk:
     def __init__(self, config, debug=False):
         self.DEBUG = debug
         self.config = config
-        self.check_access_token()
         self.client_id = config.client_id
         self.client_secret = config.client_secret
         self.access_token = config.access_token
@@ -24,8 +23,10 @@ class BaiduNetdisk:
 
         self.session = requests.Session()
 
-        if self.access_token is None:
-            if self.refresh_token is not None:
+        self.check_access_token()
+
+        if not self.access_token:
+            if self.refresh_token:
                 print("No access token, refreshing")
                 self.refresh_access_token()
             else:

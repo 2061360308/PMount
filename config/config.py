@@ -14,20 +14,30 @@ class ConfigManager:
     def __init__(self):
         self._config = self._load_config()
 
+        if 'disk' not in self._config or not isinstance(self._config['disk'], list):
+            self._config['disk'] = []
+
     @property
     def config(self):
         return self._config
 
     def _load_config(self):
-        # if not os.path.exists(self.configPath):
-        #     with open(self.configPath, 'w') as f:
-        #         json.dump({
-        #             "client_id": "",
-        #             "client_secret": "",
-        #             "refresh_token": "",
-        #             "access_token": "",
-        #             "access_token_time": 0
-        #         }, f, indent=4)
+        if not os.path.exists(self.configPath):
+            with open(self.configPath, 'w+', encoding='utf-8') as f:
+                f.write(yaml.dump({
+                    'disk': [],
+                    'temp': {
+                        'dir': {
+                            'CACHE_TIMEOUT': 60,
+                            'PRELOAD_LEVEL': 2,
+                        },
+                        'file': {
+                            'CACHE_TIMEOUT': 604800,
+                            'MAX_CACHE_SIZE': 10737418240,
+                            'ROOT': './temp'
+                        }
+                    }
+                }))
         with open(self.configPath, 'r', encoding='utf-8') as f:
             return yaml.safe_load(f)
 
@@ -73,6 +83,32 @@ class ConfigManager:
         """
         keys = list(keys)
         self._update_nested_config(self._config, keys, value)
+        self._save_config()
+
+    def add_device(self, device, config):
+        """
+        添加一个设备
+
+        :param device:
+        :param config:
+        :return:
+        """
+        self._config['disk'].append(device)
+        self._config[device['name']] = config
+        self._save_config()
+
+    def use_device(self, name, use=True):
+        """
+        使用一个设备
+
+        :param use: bool, True: 使用，False: 不使用
+        :param name:  设备名
+        :return:
+        """
+        for item in self._config['disk']:
+            if item['name'] == name:
+                item['use'] = use
+                break
         self._save_config()
 
 

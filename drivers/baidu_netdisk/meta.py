@@ -1,3 +1,4 @@
+import time
 import typing
 
 meta = {
@@ -10,17 +11,12 @@ meta = {
             'desc': '需要挂载的百度网盘的根目录',
             'type': str,
             "default": "/",
-        },
-        'LocalMountPath': {
-            'name': 'mount',
-            'desc': '本地目录',
-            'type': str,
             'required': True,
         },
         'RefreshToken': {
             'name': 'refresh_token',
             'desc': 'Refresh Token, 可以到下方链接获取',
-            'link': 'https://pan.baidu.com/rest/2.0/xpan/auth',
+            'link': 'https://openapi.baidu.com/oauth/2.0/authorize?response_type=code&client_id=iYCeC9g08h5vuP9UqvPHKKSVrKFXGa1v&redirect_uri=https://alist.nn.ci/tool/baidu/callback&scope=basic,netdisk&qrcode=1',
             'type': str,
             'required': True,
         },
@@ -42,6 +38,11 @@ meta = {
             "name": "access_token",
             "default": "",
             'type': str,
+        },
+        'AccessTokenTime': {
+            "name": "access_token_time",
+            "default": 0,
+            'type': float,
         },
     },
 }

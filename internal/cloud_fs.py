@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-
+import ctypes
 import errno
 import os
 import json
@@ -10,18 +10,28 @@ try:
     import _find_fuse_parts
 except ImportError:
     pass
-from fuse import FuseOSError, Operations
+from fuse import FuseOSError, Operations, fuse_exit, fuse_get_context, _libfuse
 from internal.log import get_logger, funcLog
 from internal.dir_info import dirInfoManager
 from internal.driver import drivers_obj
 from internal.temp_fs import tempFs
-
-encrpted_length = 512
+from internal import context
 
 logger = get_logger(__name__)
 
 PRELOAD_LEVEL = 4
 CACHE_TIMEOUT = 60
+
+# 定义 FUSE 上下文结构
+class FuseContext(ctypes.Structure):
+    _fields_ = [
+        ("fuse", ctypes.c_void_p),
+        ("uid", ctypes.c_uint),
+        ("gid", ctypes.c_uint),
+        ("pid", ctypes.c_uint),
+        ("private_data", ctypes.c_void_p),
+        ("umask", ctypes.c_uint)
+    ]
 
 
 class CloudFS(Operations):
@@ -32,6 +42,17 @@ class CloudFS(Operations):
         logger.info("- fuse 4 cloud driver -")
         self.avail, self.total_size, self.used = self.init_disk_quota()  # 初始化磁盘空间大小
         dirInfoManager.readDirAsync(self.name, "/", PRELOAD_LEVEL)  # 预读根目录(默认深度为2)
+
+    def init(self, path):
+        """
+        初始化方法
+        :param path:
+        :return:
+        """
+
+        # 保存 fuse 指针，供后续主线程使用
+        fuse_ptr = ctypes.c_void_p(_libfuse.fuse_get_context().contents.fuse)
+        context.fuse_ptrs[self.name] = fuse_ptr
 
     def init_disk_quota(self):
         """

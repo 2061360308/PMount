@@ -1,19 +1,24 @@
+import ctypes
 import sys
 
-from PySide6.QtCore import Qt, QRect
+from PySide6.QtCore import Qt, QRect, QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QHBoxLayout, QFrame, QVBoxLayout, QWidget, QSpacerItem, QSizePolicy
 from qfluentwidgets import SubtitleLabel, ElevatedCardWidget, FluentIcon, InfoBadge, BodyLabel, ComboBox, \
-    SingleDirectionScrollArea
+    SingleDirectionScrollArea, qconfig, ColorConfigItem, InfoBarIcon, FlyoutAnimationType, Flyout
 
 from qfluentwidgets import (SwitchButton, ToolButton)
 import res.resource_rc
 from internal.server import server
+from UI import public
+from internal.util import import_meta_modules
 
 
 class ThreeColumnLayout(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+
+        self.setStyleSheet(f"background-color: rgba(0,0,0,0);")
 
         self.setWindowTitle("三列布局示例")
         self.setGeometry(100, 100, 800, 600)
@@ -52,6 +57,8 @@ class ThreeColumnLayout(QWidget):
         # 记录当前添加的 widget 数量
         self.widget_count = 0
 
+        # qconfig.themeChanged.connect(self.response_theme)
+
     def add_widget(self, widget):
         # 计算当前 widget 应该添加到哪一列
         column_index = self.widget_count % 3
@@ -65,6 +72,20 @@ class ThreeColumnLayout(QWidget):
 
         # 更新 widget 计数
         self.widget_count += 1
+
+    def clear(self):
+        # 遍历清空所有组件
+        for layout in [self.column1, self.column2, self.column3]:
+            for i in range(layout.count()):
+                layout.itemAt(i).widget().deleteLater()
+
+        self.widget_count = 0
+
+    def response_theme(self):
+        if qconfig.theme == "light":
+            self.setStyleSheet(f"background-color: rgba(0,0,0,0);")
+        else:
+            self.setStyleSheet(f"background-color: rgba(0,0,0,0);")
 
 
 class DeviceCard(ElevatedCardWidget):
@@ -89,7 +110,7 @@ class DeviceCard(ElevatedCardWidget):
 
         self.setMaximumSize(300, 200)
 
-        self.setStyleSheet("background-color: #F5F5F5; border-radius: 10px;")
+        self.setStyleSheet("border-radius: 10px;")
 
         self.layout = QVBoxLayout(self)
 
@@ -108,8 +129,9 @@ class DeviceCard(ElevatedCardWidget):
         self.typeLabel.setText(f"类型：{self.driver_pkg_name}")
         infoLayout.addWidget(self.typeLabel)
         infoLayout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
-        self.stateBadge = InfoBadge.success(f"状态：{self.state}", parent=self)
-        infoLayout.addWidget(self.stateBadge)
+        self.stateBadge = QHBoxLayout(self)
+        self.updateStateBadge(state)
+        infoLayout.addLayout(self.stateBadge)
 
         self.layout.addLayout(infoLayout)
 
@@ -146,6 +168,56 @@ class DeviceCard(ElevatedCardWidget):
         self.layout.addWidget(self.horizontalLayoutWidget)
         self.setLayout(self.layout)
 
+        self.switchButton.checkedChanged.connect(self.switch_use)
+        self.delButton.clicked.connect(self.delete_device)
+        self.editButton.clicked.connect(self.edit_device)
+
+    def updateStateBadge(self, state=None):
+        if not state:
+            state = server.mountNodes[self.device_name]['state']
+
+        # 清空之前的状态标签
+        for i in range(self.stateBadge.count()):
+            self.stateBadge.itemAt(i).widget().deleteLater()
+
+        if state == "已挂载":
+            stateBadge = InfoBadge.success(f"状态：{state}", self)
+        elif state == "等待挂载":
+            stateBadge = InfoBadge.warning(f"状态：{state}", self)
+            # 等待挂载是一个动态状态，3 秒后更新状态
+            QTimer.singleShot(3000, self.updateStateBadge)
+        elif state == "挂载失败":
+            stateBadge = InfoBadge.error(f"状态：{state}", self)
+        else:
+            stateBadge = InfoBadge.info(f"状态：{state}", self)
+
+        self.stateBadge.addWidget(stateBadge)
+
+    def switch_use(self, checked):
+        if not checked:
+            server.stop(self.device_name)
+            self.use = False
+        else:
+            server.use(self.device_name)
+            self.use = True
+
+        self.updateStateBadge()
+
+    def delete_device(self):
+        if self.use:
+            Flyout.create(
+                icon=InfoBarIcon.WARNING,
+                title='无法删除',
+                content="设备正在使用中，无法删除，请停用设备后重试",
+                target=self.delButton,
+                parent=self,
+                isClosable=True,
+                aniType=FlyoutAnimationType.PULL_UP
+            )
+
+    def edit_device(self):
+        public.switchTo(public.childrenPages['edit_device'])
+
 
 class DevicePageWidget(QFrame):
 
@@ -168,8 +240,14 @@ class DevicePageWidget(QFrame):
         topLayout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
 
         self.filterComboBox = ComboBox()
-        # 添加选项
-        items = ['shoko', '西宫硝子', '宝多六花', '小鸟游六花']
+
+        items = ['全部']
+        self.meta_list = import_meta_modules('drivers')
+        print(self.meta_list)
+        for item in self.meta_list:
+            # 添加选项
+            items.append(item.meta['name'])
+
         self.filterComboBox.addItems(items)
         # 当前选项的索引改变信号
         self.filterComboBox.currentIndexChanged.connect(lambda index: print(self.filterComboBox.currentText()))
@@ -184,6 +262,8 @@ class DevicePageWidget(QFrame):
         self.threeColumnLayout = ThreeColumnLayout()
         self.layout.addWidget(self.threeColumnLayout)
 
+        self.addButton.clicked.connect(self.showNewDevicePage)
+
         self.showDevice()
 
     def showDevice(self):
@@ -191,3 +271,10 @@ class DevicePageWidget(QFrame):
             item = server.mountNodes[name]
             deviceCard = DeviceCard(name, item['type'], item['mount'], item['state'], item['use'])
             self.threeColumnLayout.add_widget(deviceCard)
+
+    def showNewDevicePage(self):
+        public.switchTo(public.childrenPages['new_device'])
+
+    def update_device(self):
+        self.threeColumnLayout.clear()
+        self.showDevice()

@@ -44,3 +44,8 @@ PMount的安装包可以在[GitHub Release](#)
 ```shell
 python -m nuitka --standalone --include-data-dir=drivers=drivers --include-data-file=config/config.yml=config/config.yml --include-data-file=logo.ico=logo.ico --plugin-enable=pyside6 --lto=yes --windows-icon-from-ico=./logo.ico --output-filename=PMount.exe --output-dir=./output run.py
 ```
+
+***编译qrc资源***
+```shell
+pyside6-rcc res/resource.qrc -o res/resource_rc.py
+```
