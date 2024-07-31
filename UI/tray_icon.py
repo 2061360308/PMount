@@ -45,7 +45,6 @@ class TrayIcon:
     @abc.abstractmethod
     def left_click(self):
         '''鼠标左键单击事件'''
-        print("鼠标左键被单击了")
         if QApplication.instance() is None:
             app = QApplication(sys.argv)
         else:

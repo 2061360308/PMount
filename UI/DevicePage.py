@@ -9,9 +9,10 @@ from qfluentwidgets import SubtitleLabel, ElevatedCardWidget, FluentIcon, InfoBa
 
 from qfluentwidgets import (SwitchButton, ToolButton)
 import res.resource_rc
+from config import remove_device
 from internal.server import server
 from UI import public
-from internal.util import import_meta_modules
+from internal.util import import_meta_modules, device_change
 
 
 class ThreeColumnLayout(QWidget):
@@ -214,9 +215,26 @@ class DeviceCard(ElevatedCardWidget):
                 isClosable=True,
                 aniType=FlyoutAnimationType.PULL_UP
             )
+            return
+
+        remove_device(self.device_name)
+        device_change()
+        public.childrenPages['device'].update_device()
 
     def edit_device(self):
-        public.switchTo(public.childrenPages['edit_device'])
+        if self.use:
+            Flyout.create(
+                icon=InfoBarIcon.WARNING,
+                title='无法修改',
+                content="设备正在使用中，无法修改，请停用设备后重试",
+                target=self.delButton,
+                parent=self,
+                isClosable=True,
+                aniType=FlyoutAnimationType.PULL_UP
+            )
+            return
+        public.childrenPages['edit_config'].load_config(self.device_name)
+        public.switchTo(public.childrenPages['edit_config'])
 
 
 class DevicePageWidget(QFrame):
@@ -243,7 +261,6 @@ class DevicePageWidget(QFrame):
 
         items = ['全部']
         self.meta_list = import_meta_modules('drivers')
-        print(self.meta_list)
         for item in self.meta_list:
             # 添加选项
             items.append(item.meta['name'])

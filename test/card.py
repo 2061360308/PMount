@@ -384,58 +384,58 @@ class MicaWindow(Window):
             self.windowEffect.setMicaEffect(self.winId(), isDarkTheme())
 
 
-class Demo1(MicaWindow):
+# class Demo1(MicaWindow):
+#
+#     def __init__(self):
+#         super().__init__()
+#         self.setWindowIcon(QIcon(':/qfluentwidgets/images/logo.png'))
+#         self.setWindowTitle('Fluent Emoji gallery')
+#
+#         self.flowLayout = FlowLayout(self)
+#
+#         self.resize(580, 680)
+#         self.flowLayout.setSpacing(6)
+#         self.flowLayout.setContentsMargins(30, 60, 30, 30)
+#         self.flowLayout.setAlignment(Qt.AlignVCenter)
+#
+#         for path in Path('./resource').glob('*.png'):
+#             self.addCard(str(path))
+#
+#     def addCard(self, iconPath: str):
+#         card = EmojiCard(iconPath, self)
+#         self.flowLayout.addWidget(card)
 
-    def __init__(self):
-        super().__init__()
-        self.setWindowIcon(QIcon(':/qfluentwidgets/images/logo.png'))
-        self.setWindowTitle('Fluent Emoji gallery')
 
-        self.flowLayout = FlowLayout(self)
-
-        self.resize(580, 680)
-        self.flowLayout.setSpacing(6)
-        self.flowLayout.setContentsMargins(30, 60, 30, 30)
-        self.flowLayout.setAlignment(Qt.AlignVCenter)
-
-        for path in Path('./resource').glob('*.png'):
-            self.addCard(str(path))
-
-    def addCard(self, iconPath: str):
-        card = EmojiCard(iconPath, self)
-        self.flowLayout.addWidget(card)
-
-
-class Demo2(MicaWindow):
-
-    def __init__(self):
-        super().__init__()
-        self.resize(600, 600)
-
-        self.vBoxLayout = QVBoxLayout(self)
-
-        self.vBoxLayout.setSpacing(6)
-        self.vBoxLayout.setContentsMargins(30, 60, 30, 30)
-        self.vBoxLayout.setAlignment(Qt.AlignTop)
-
-        suffix = ":/qfluentwidgets/images/controls"
-        self.addCard(f":/qfluentwidgets/images/logo.png",
-                     "PyQt-Fluent-Widgets", 'Shokokawaii Inc.')
-        self.addCard(f"{suffix}/TitleBar.png",
-                     "PyQt-Frameless-Window", 'Shokokawaii Inc.')
-        self.addCard(f"{suffix}/RatingControl.png",
-                     "反馈中心", 'Microsoft Corporation')
-        self.addCard(f"{suffix}/Checkbox.png",
-                     "Microsoft 使用技巧", 'Microsoft Corporation')
-        self.addCard(f"{suffix}/Pivot.png", "MSN 天气", 'Microsoft Corporation')
-        self.addCard(f"{suffix}/MediaPlayerElement.png",
-                     "电影和电视", 'Microsoft Corporation')
-        self.addCard(f"{suffix}/PersonPicture.png",
-                     "照片", 'Microsoft Corporation')
-
-    def addCard(self, icon, title, content):
-        card = AppCard(icon, title, content, self)
-        self.vBoxLayout.addWidget(card, alignment=Qt.AlignTop)
+# class Demo2(MicaWindow):
+#
+#     def __init__(self):
+#         super().__init__()
+#         self.resize(600, 600)
+#
+#         self.vBoxLayout = QVBoxLayout(self)
+#
+#         self.vBoxLayout.setSpacing(6)
+#         self.vBoxLayout.setContentsMargins(30, 60, 30, 30)
+#         self.vBoxLayout.setAlignment(Qt.AlignTop)
+#
+#         suffix = ":/qfluentwidgets/images/controls"
+#         self.addCard(f":/qfluentwidgets/images/logo.png",
+#                      "PyQt-Fluent-Widgets", 'Shokokawaii Inc.')
+#         self.addCard(f"{suffix}/TitleBar.png",
+#                      "PyQt-Frameless-Window", 'Shokokawaii Inc.')
+#         self.addCard(f"{suffix}/RatingControl.png",
+#                      "反馈中心", 'Microsoft Corporation')
+#         self.addCard(f"{suffix}/Checkbox.png",
+#                      "Microsoft 使用技巧", 'Microsoft Corporation')
+#         self.addCard(f"{suffix}/Pivot.png", "MSN 天气", 'Microsoft Corporation')
+#         self.addCard(f"{suffix}/MediaPlayerElement.png",
+#                      "电影和电视", 'Microsoft Corporation')
+#         self.addCard(f"{suffix}/PersonPicture.png",
+#                      "照片", 'Microsoft Corporation')
+#
+#     def addCard(self, icon, title, content):
+#         card = AppCard(icon, title, content, self)
+#         self.vBoxLayout.addWidget(card, alignment=Qt.AlignTop)
 
 
 class AppInterface(SingleDirectionScrollArea):
@@ -511,10 +511,10 @@ if __name__ == '__main__':
     # setTheme(Theme.DARK)
 
     app = QApplication(sys.argv)
-    w1 = Demo1()
-    w1.show()
-    w2 = Demo2()
-    w2.show()
-    w3 = Demo3()
+    # w1 = Demo1()
+    # w1.show()
+    # w2 = Demo2()
+    # w2.show()
+    w3 = AppInterface()
     w3.show()
     app.exec()

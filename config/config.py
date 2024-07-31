@@ -111,5 +111,21 @@ class ConfigManager:
                 break
         self._save_config()
 
+    def remove_device(self, name):
+        """
+        删除一个设备
+
+        :param name: 设备名
+        :return:
+        """
+        for item in self._config['disk']:
+            if item['name'] == name:
+                self._config['disk'].remove(item)
+                break
+
+        if self._config[name]:
+            del self._config[name]
+        self._save_config()
+
 
 configManager = ConfigManager()

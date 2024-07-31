@@ -17,7 +17,7 @@ class TempFs:
 
     def __init__(self):
         self.root = config.temp.file.ROOT  # 缓存根目录
-        self.max_size = config.temp.file.MAX_CACHE_SIZE  # 缓存占用最大大小
+        self.max_size = config.temp.file.MAX_CACHE_SIZE * 1024 * 1024 * 1024  # 缓存占用最大大小
         self.timeout = config.temp.file.CACHE_TIMEOUT  # 缓存超时时间
 
         if not os.path.exists(self.root):

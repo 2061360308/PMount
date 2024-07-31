@@ -8,6 +8,7 @@ from .driver_config import DriverConfig
 update_config = configManager.update_config
 add_device = configManager.add_device
 use_device = configManager.use_device
+remove_device = configManager.remove_device
 
 
 class ConfigWrapper:
@@ -15,6 +16,9 @@ class ConfigWrapper:
         self.config_manager = config_manager
 
     def __getattr__(self, name):
+        return EasyDict(configManager.config)[name]
+
+    def __getitem__(self, name):
         return EasyDict(configManager.config)[name]
 
 

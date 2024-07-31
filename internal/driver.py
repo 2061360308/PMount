@@ -16,6 +16,11 @@ def update_driver():
     from config import config, DriverConfig
 
     global need_modules, drivers_obj
+
+    # 清空之前数据  Todo 多任务的情况下，共用资源可能正在使用，这样直接清空可能会导致问题
+    need_modules = {}
+    drivers_obj = {}
+
     get_need_module(config.disk)
 
     for name in need_modules:

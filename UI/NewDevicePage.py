@@ -169,20 +169,22 @@ class AddDeviceConfigWidget(QWidget):
         self.submitButton.clicked.connect(self.submit)
         self.selectPathButton.clicked.connect(self.selectPath)
 
-    def verify(self):
+    def verify(self, create=True):
         """
         验证用户输入的配置是否合法
         :return:
         """
         # 检测名称以及路径是否填写
         name = self.nameLineEdit.text()
+
         if not name:
             return False, "设备名称不能为空"
 
-        if config.disk:
-            for item in config.disk:
-                if item['name'] == name:
-                    return False, f"设备名称“{name}”已存在"
+        if create:  # 如果是创建设备，检测设备名称是否存在
+            if config.disk:
+                for item in config.disk:
+                    if item['name'] == name:
+                        return False, f"设备名称“{name}”已存在"
 
         mount_path = self.pathLineEdit.text()
         mount_dir = self.pathFolderLineEdit.text()
@@ -209,7 +211,8 @@ class AddDeviceConfigWidget(QWidget):
 
             device_config[self.meta['config'][key]['name']] = value
 
-        return True, {"name": name, "mount": os.path.join(mount_path, mount_dir), "type": self.meta['package_name'], "config": device_config}
+        return True, {"name": name, "mount": os.path.join(mount_path, mount_dir), "type": self.meta['package_name'],
+                      "config": device_config}
 
     def selectPath(self):
         parent_dir = QFileDialog.getExistingDirectory(self, "选择要挂在到路径", "C:/")
@@ -404,6 +407,79 @@ class NewDevicePageWidget(QFrame):
     def switchInterface(self, objectName):
         if objectName == 'driverSelection':
             self.setInterface('driverSelection', None)
+
+
+class EditConfigWidget(AddDeviceConfigWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("editConfigWidget")
+
+    def load_config(self, name):
+        self.name = name
+
+        for item in import_meta_modules('drivers'):
+            self.meta = item.meta
+
+        self.titleLabel.setText(f"驱动：{self.meta['name']}")
+        self.driver_link.setText(f"查看{self.meta['name']}的配置说明")
+        self.driver_link.setUrl(QUrl(self.meta['doc_link']))
+
+        # 显示现有的配置
+
+        self.nameLineEdit.setText(name)
+        self.nameLineEdit.setReadOnly(True)
+
+        current_config = None
+        for item in config.disk:
+            if item['name'] == name:
+                current_config = item
+                break
+        # path, path_folder = os.path.split(config[name]['mount'])
+        path, path_folder = os.path.split(current_config['mount'])
+        self.pathLineEdit.setText(path)
+        self.pathFolderLineEdit.setText(path_folder)
+
+        for key in self.meta['config']:
+            item = self.meta['config'][key]
+            item['default'] = config[name][item['name']]
+
+        self.configWidget.clear()
+        self.configWidget.addConfig(self.meta['config'])
+
+    def submit(self):
+        status, msg = self.verify(create=False)
+        if not status:
+            Flyout.create(
+                icon=InfoBarIcon.WARNING,
+                title='提示',
+                content=msg,
+                target=self,
+                parent=self,
+                isClosable=True,
+                aniType=FlyoutAnimationType.PULL_UP
+            )
+            return
+
+        else:
+            config_data = msg
+
+        mount = config_data['mount']
+        device_config = config_data['config']
+
+        index = 0
+        for item in config.disk:
+            if item['name'] == self.name:
+                index = config.disk.index(item)
+                break
+
+        update_config(mount, "disk", index, "mount")
+
+        for key in device_config:
+            update_config(device_config[key], self.name, key)
+
+        device_change()
+        public.childrenPages['device'].update_device()
+        public.switchTo(public.childrenPages['device'])
 
 
 if __name__ == '__main__':

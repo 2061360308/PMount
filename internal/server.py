@@ -64,7 +64,10 @@ class Server:
                 thread.join()
 
     def updateMountNodes(self):
+        current_nodes = []
+
         for item in config.disk:
+            current_nodes.append(item.name)
             if item.name not in self.mountNodes:
                 self.mountNodes[item.name] = {
                     'use': item.use,
@@ -72,6 +75,16 @@ class Server:
                     'type': item.type,
                     'state': "等待挂载" if item.use else "未启用"
                 }
+            else:
+                self.mountNodes[item.name]['use'] = item.use
+                self.mountNodes[item.name]['mount'] = item.mount
+
+        # 删除不存在的节点
+        del_nodes = []
+
+        for name in current_nodes:
+            if name not in self.mountNodes:
+                del self.mountNodes[name]
 
     def use(self, name):
         """

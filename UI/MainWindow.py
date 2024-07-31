@@ -1,19 +1,18 @@
 import sys
 
-from PySide6.QtCore import QTimer, QCoreApplication
+from PySide6.QtCore import QTimer
 from PySide6.QtGui import QIcon, QGuiApplication, QColor
 from PySide6.QtWidgets import QApplication
-from qfluentwidgets import NavigationItemPosition, FluentWindow, MSFluentWindow, toggleTheme, FluentIconBase, qconfig
+from qfluentwidgets import NavigationItemPosition, MSFluentWindow, toggleTheme
 from qfluentwidgets import FluentIcon as FIF
 import res.resource_rc
 from UI.DevicePage import DevicePageWidget
 from UI.Icon import CustomIcon
-from UI.TaskPage import TaskPageWidget, DownloadPageWidget, UploadPageWidget
+from UI.TaskPage import TaskPageWidget
 from UI.DashboardPage import DashboardPageWidget
 from UI.AboutPage import AboutPageWidget
-from UI.DocPage import DocPageWidget
 from UI.SettingPage import SettingPageWidget
-from UI.NewDevicePage import NewDevicePageWidget
+from UI.NewDevicePage import NewDevicePageWidget, EditConfigWidget
 from UI import public
 
 
@@ -26,11 +25,8 @@ class MainWindow(MSFluentWindow):
         # 创建子界面，实际使用时将 Widget 换成自己的子界面
         self.deviceInterface = DevicePageWidget(self)  # 设备界面
         self.taskInterface = TaskPageWidget(self)
-        self.downloadTaskInterface = DownloadPageWidget(self)
-        self.uploadTaskInterface = UploadPageWidget(self)
         self.dashboardInterface = DashboardPageWidget(self)
         self.aboutInterface = AboutPageWidget(self)
-        self.docInterface = DocPageWidget(self)
         self.settingInterface = SettingPageWidget(self)
 
         self.initNavigation()
@@ -38,6 +34,8 @@ class MainWindow(MSFluentWindow):
 
         self.newDevicePage = NewDevicePageWidget(self)
         self.stackedWidget.addWidget(self.newDevicePage)
+        self.editConfigPage = EditConfigWidget(self)
+        self.stackedWidget.addWidget(self.editConfigPage)
 
         self.childrenPages = {
             'device': self.deviceInterface,
@@ -46,6 +44,7 @@ class MainWindow(MSFluentWindow):
             'about': self.aboutInterface,
             'setting': self.settingInterface,
             'new_device': self.newDevicePage,
+            'edit_config': self.editConfigPage,
         }
 
         public.childrenPages = self.childrenPages
