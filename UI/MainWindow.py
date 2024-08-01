@@ -3,7 +3,7 @@ import sys
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QIcon, QGuiApplication, QColor
 from PySide6.QtWidgets import QApplication
-from qfluentwidgets import NavigationItemPosition, MSFluentWindow, toggleTheme
+from qfluentwidgets import NavigationItemPosition, MSFluentWindow, toggleTheme, setTheme, Theme
 from qfluentwidgets import FluentIcon as FIF
 import res.resource_rc
 from UI.DevicePage import DevicePageWidget
@@ -82,6 +82,8 @@ class MainWindow(MSFluentWindow):
         desktop = QGuiApplication.primaryScreen().availableGeometry()
         w, h = desktop.width(), desktop.height()
         self.move(w // 2 - self.width() // 2, h // 2 - self.height() // 2)
+
+        setTheme(Theme.LIGHT)
 
     def closeEvent(self, event):
         event.accept()
