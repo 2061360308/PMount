@@ -1,16 +1,16 @@
 import ctypes
 import sys
+import time
 
 from PySide6.QtCore import Qt, QRect, QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QHBoxLayout, QFrame, QVBoxLayout, QWidget, QSpacerItem, QSizePolicy
 from qfluentwidgets import SubtitleLabel, ElevatedCardWidget, FluentIcon, InfoBadge, BodyLabel, ComboBox, \
-    SingleDirectionScrollArea, qconfig, ColorConfigItem, InfoBarIcon, FlyoutAnimationType, Flyout
+    SingleDirectionScrollArea, qconfig, ColorConfigItem, InfoBarIcon, FlyoutAnimationType, Flyout, InfoLevel
 
 from qfluentwidgets import (SwitchButton, ToolButton)
 import res.resource_rc
-from config import remove_device
-from internal.server import server
+from internal.server import server, DeviceStatus
 from UI import public
 from internal.util import import_meta_modules, device_change
 
@@ -90,7 +90,7 @@ class ThreeColumnLayout(QWidget):
 
 
 class DeviceCard(ElevatedCardWidget):
-    def __init__(self, device_name, driver_pkg_name, mount_path, state, use, parent=None):
+    def __init__(self, device, parent=None):
         """
         设备卡片
 
@@ -103,11 +103,8 @@ class DeviceCard(ElevatedCardWidget):
         """
         super().__init__(parent)
 
-        self.device_name = device_name
-        self.driver_pkg_name = driver_pkg_name
-        self.mount_path = mount_path
-        self.state = state
-        self.use = use
+        self.device = device
+        self.driver_pkg_name = device.device_type
 
         self.setMaximumSize(300, 200)
 
@@ -119,7 +116,7 @@ class DeviceCard(ElevatedCardWidget):
         self.deviceNameLabel.setGeometry(QRect(100, 10, 131, 31))
         self.deviceNameLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
         # self.deviceNameLabel.setStyleSheet("font: 16pt 'Segoe UI';background-color: #00000000")
-        self.deviceNameLabel.setText(self.device_name)
+        self.deviceNameLabel.setText(self.device.name)
 
         self.layout.addWidget(self.deviceNameLabel)
 
@@ -130,16 +127,16 @@ class DeviceCard(ElevatedCardWidget):
         self.typeLabel.setText(f"类型：{self.driver_pkg_name}")
         infoLayout.addWidget(self.typeLabel)
         infoLayout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
-        self.stateBadge = QHBoxLayout(self)
-        self.updateStateBadge(state)
-        infoLayout.addLayout(self.stateBadge)
+        self.stateBadge = InfoBadge(self)
+        self.updateStateBadge(self.device.status)
+        infoLayout.addWidget(self.stateBadge)
 
         self.layout.addLayout(infoLayout)
 
         self.mountLabel = BodyLabel(self)
         self.mountLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
         # self.mountLabel.setStyleSheet("font: 12pt 'Segoe UI';background-color: #00000000")
-        self.mountLabel.setText(f"挂载点：{self.mount_path}")
+        self.mountLabel.setText(f"挂载点：{self.device.path}")
         self.layout.addWidget(self.mountLabel)
 
         self.horizontalLayoutWidget = QWidget(self)
@@ -162,7 +159,7 @@ class DeviceCard(ElevatedCardWidget):
         self.horizontalLayout.addItem(self.horizontalSpacer)
 
         self.switchButton = SwitchButton(self.horizontalLayoutWidget)
-        self.switchButton.setChecked(True if self.use else False)
+        self.switchButton.setChecked(True if self.device.use else False)
 
         self.horizontalLayout.addWidget(self.switchButton)
 
@@ -173,39 +170,42 @@ class DeviceCard(ElevatedCardWidget):
         self.delButton.clicked.connect(self.delete_device)
         self.editButton.clicked.connect(self.edit_device)
 
+        self.device.changeSignal.connect(self.device_change)
+
     def updateStateBadge(self, state=None):
-        if not state:
-            state = server.mountNodes[self.device_name]['state']
+        if state is None:
+            state = self.device.status
 
-        # 清空之前的状态标签
-        for i in range(self.stateBadge.count()):
-            self.stateBadge.itemAt(i).widget().deleteLater()
-
-        if state == "已挂载":
-            stateBadge = InfoBadge.success(f"状态：{state}", self)
-        elif state == "等待挂载":
-            stateBadge = InfoBadge.warning(f"状态：{state}", self)
-            # 等待挂载是一个动态状态，3 秒后更新状态
-            QTimer.singleShot(3000, self.updateStateBadge)
-        elif state == "挂载失败":
-            stateBadge = InfoBadge.error(f"状态：{state}", self)
+        if state == DeviceStatus.MOUNTED:
+            self.stateBadge.setLevel(InfoLevel.SUCCESS)
+            self.stateBadge.setText("状态：已挂载")
+        elif state == DeviceStatus.WAIT_MOUNT:
+            self.stateBadge.setLevel(InfoLevel.WARNING)
+            self.stateBadge.setText("状态：等待挂载")
+        elif state == DeviceStatus.MOUNT_FAILED:
+            self.stateBadge.setLevel(InfoLevel.ERROR)
+            self.stateBadge.setText("状态：挂载失败")
+        elif state == DeviceStatus.UNMOUNTED:
+            self.stateBadge.setLevel(InfoLevel.INFOAMTION)
+            self.stateBadge.setText("状态：未启用")
         else:
-            stateBadge = InfoBadge.info(f"状态：{state}", self)
-
-        self.stateBadge.addWidget(stateBadge)
+            raise ValueError("未知状态")
 
     def switch_use(self, checked):
-        if not checked:
-            server.stop(self.device_name)
-            self.use = False
+        """
+        启用/停用设备
+        :param checked:
+        :return:
+        """
+        if checked:
+            server.start_device(self.device)
         else:
-            server.use(self.device_name)
-            self.use = True
+            server.stop_device(self.device)
 
         self.updateStateBadge()
 
     def delete_device(self):
-        if self.use:
+        if self.device.use:
             Flyout.create(
                 icon=InfoBarIcon.WARNING,
                 title='无法删除',
@@ -217,12 +217,10 @@ class DeviceCard(ElevatedCardWidget):
             )
             return
 
-        remove_device(self.device_name)
-        device_change()
-        public.childrenPages['device'].update_device()
+        server.remove_device(self.device)
 
     def edit_device(self):
-        if self.use:
+        if self.device.use:
             Flyout.create(
                 icon=InfoBarIcon.WARNING,
                 title='无法修改',
@@ -233,8 +231,16 @@ class DeviceCard(ElevatedCardWidget):
                 aniType=FlyoutAnimationType.PULL_UP
             )
             return
-        public.childrenPages['edit_config'].load_config(self.device_name)
+        public.childrenPages['edit_config'].load_config(self.device)
         public.switchTo(public.childrenPages['edit_config'])
+
+    def device_change(self, event, device):
+        print(event)
+        if event == "status_change":
+            self.updateStateBadge(device.status)
+        elif event == "info_change":
+            self.mountLabel.setText(f"挂载点：{device.path}")
+            self.switchButton.setChecked(True if device.use else False)
 
 
 class DevicePageWidget(QFrame):
@@ -283,14 +289,29 @@ class DevicePageWidget(QFrame):
 
         self.showDevice()
 
+        server.deviceChange.connect(self.device_change)
+
     def showDevice(self):
-        for name in server.mountNodes:
-            item = server.mountNodes[name]
-            deviceCard = DeviceCard(name, item['type'], item['mount'], item['state'], item['use'])
+        for device in server.devices.values():
+            deviceCard = DeviceCard(device, self)
             self.threeColumnLayout.add_widget(deviceCard)
 
     def showNewDevicePage(self):
+        """
+        切换到添加新设备页面
+        :return:
+        """
         public.switchTo(public.childrenPages['new_device'])
+
+    def device_change(self, event, device):
+        """
+        如果有增删设备的情况，更新设备列表
+        :param event:
+        :param device:
+        :return:
+        """
+        if event == "remove_device" or event == "add_device":
+            self.update_device()
 
     def update_device(self):
         self.threeColumnLayout.clear()

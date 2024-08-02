@@ -1,7 +1,7 @@
 import importlib
 import os
 import pkgutil
-from config import config, add_device, update_config, use_device
+from config import config
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtWidgets import QFrame, QStackedWidget, QVBoxLayout, QHBoxLayout, QWidget, QSpacerItem, QSizePolicy, \
     QFormLayout, QFileDialog
@@ -10,7 +10,7 @@ from qfluentwidgets import SubtitleLabel, setFont, PrimaryToolButton, FluentIcon
     IconWidget, TransparentPushButton, Flyout, InfoBarIcon, FlyoutAnimationType
 from UI import public
 from internal.server import server
-from internal.util import import_meta_modules, device_change
+from internal.util import import_meta_modules
 
 
 # Todo 心态崩溃，开始瞎写的布局，我看着代码都感觉糟心，后续再优化吧
@@ -121,6 +121,7 @@ class ConfigWidget(SingleDirectionScrollArea):
 class ComplationWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.config_data = None
         self.setObjectName("complationWidget")
 
         self.layout = QVBoxLayout(self)
@@ -141,19 +142,24 @@ class ComplationWidget(QWidget):
         self.finishButton.clicked.connect(self.finish)
 
     def mount(self):
-        use_device(self.device_name, True)  # 更新配置文件
-        device_change()  # 通知设备变更
-        server.use(self.device_name)  # 启用设备
-        public.childrenPages['device'].update_device()  # UI更新设备列表
+        name = self.config_data['name']
+        path = self.config_data['path']
+        device_type = self.config_data['device_type']
+        device_config = self.config_data['config']
+        server.add_device(name=name, device_type=device_type, use=True, path=path, device_config=device_config)
+        server.start_device(name)
         public.switchTo(public.childrenPages['device'])  # 切换到设备列表页面
 
     def finish(self):
-        device_change()  # 通知设备变更
-        public.childrenPages['device'].update_device()  # UI更新设备列表
+        name = self.config_data['name']
+        path = self.config_data['path']
+        device_type = self.config_data['device_type']
+        device_config = self.config_data['config']
+        server.add_device(name=name, device_type=device_type, use=False, path=path, device_config=device_config)
         public.switchTo(public.childrenPages['device'])  # 切换到设备列表页面
 
     def setPage(self, data):
-        self.device_name = data
+        self.config_data = data
 
 
 class AddDeviceConfigWidget(QWidget):
@@ -211,7 +217,7 @@ class AddDeviceConfigWidget(QWidget):
 
             device_config[self.meta['config'][key]['name']] = value
 
-        return True, {"name": name, "mount": os.path.join(mount_path, mount_dir), "type": self.meta['package_name'],
+        return True, {"name": name, "path": os.path.join(mount_path, mount_dir), "device_type": self.meta['package_name'],
                       "config": device_config}
 
     def selectPath(self):
@@ -237,17 +243,7 @@ class AddDeviceConfigWidget(QWidget):
         else:
             config_data = msg
 
-        device = {
-            "name": config_data['name'],
-            "mount": config_data['mount'],
-            "type": config_data['type'],
-            "use": False,
-        }
-
-        # 更新配置文件
-        add_device(device, config_data['config'])
-
-        self.parent.setInterface('complation', device['name'])
+        self.parent.setInterface('complation', config_data)
 
     def initUI(self):
         self.layout = QVBoxLayout(self)
@@ -414,8 +410,9 @@ class EditConfigWidget(AddDeviceConfigWidget):
         super().__init__(parent)
         self.setObjectName("editConfigWidget")
 
-    def load_config(self, name):
-        self.name = name
+    def load_config(self, device):
+        self.device = device
+        self.name = device.name
 
         for item in import_meta_modules('drivers'):
             self.meta = item.meta
@@ -426,22 +423,18 @@ class EditConfigWidget(AddDeviceConfigWidget):
 
         # 显示现有的配置
 
-        self.nameLineEdit.setText(name)
+        self.nameLineEdit.setText(device.name)
         self.nameLineEdit.setReadOnly(True)
 
-        current_config = None
-        for item in config.disk:
-            if item['name'] == name:
-                current_config = item
-                break
-        # path, path_folder = os.path.split(config[name]['mount'])
-        path, path_folder = os.path.split(current_config['mount'])
+        current_config = config[device.name]
+
+        path, path_folder = os.path.split(config["devices"][device.name]['path'])
         self.pathLineEdit.setText(path)
         self.pathFolderLineEdit.setText(path_folder)
 
         for key in self.meta['config']:
             item = self.meta['config'][key]
-            item['default'] = config[name][item['name']]
+            item['default'] = config[device.name][item['name']]
 
         self.configWidget.clear()
         self.configWidget.addConfig(self.meta['config'])
@@ -463,22 +456,13 @@ class EditConfigWidget(AddDeviceConfigWidget):
         else:
             config_data = msg
 
-        mount = config_data['mount']
+        path = config_data['path']
         device_config = config_data['config']
 
-        index = 0
-        for item in config.disk:
-            if item['name'] == self.name:
-                index = config.disk.index(item)
-                break
+        # for key in device_config:
+        #     update_config(device_config[key], self.name, key)
 
-        update_config(mount, "disk", index, "mount")
-
-        for key in device_config:
-            update_config(device_config[key], self.name, key)
-
-        device_change()
-        public.childrenPages['device'].update_device()
+        self.device.update_info(path=path, config=device_config)
         public.switchTo(public.childrenPages['device'])
 
 

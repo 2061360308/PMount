@@ -6,3 +6,4 @@ fusepy
 diskcache
 requests
 pyyaml
+blinker

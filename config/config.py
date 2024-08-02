@@ -1,10 +1,6 @@
-import json
 import os
-import time
-from pprint import pprint
 
 import yaml
-from easydict import EasyDict
 
 
 class ConfigManager:
@@ -85,46 +81,36 @@ class ConfigManager:
         self._update_nested_config(self._config, keys, value)
         self._save_config()
 
-    def add_device(self, device, config):
+    def add_device_config(self, name, device_type, use, path, device_config):
         """
-        添加一个设备
-
-        :param device:
-        :param config:
+        添加一个设备信息到配置项
+        :param name: 名称
+        :param device_type: device type
+        :param use: 是否启用
+        :param path: 挂载路径
+        :param device_config: 设备对应配置
         :return:
         """
-        self._config['disk'].append(device)
-        self._config[device['name']] = config
+        self._config['devices'][name] = {
+            'device_type': device_type,
+            'use': use,
+            'path': path
+        }
+
+        self._config[name] = device_config
         self._save_config()
 
-    def use_device(self, name, use=True):
+    def remove_device_config(self, name):
         """
-        使用一个设备
-
-        :param use: bool, True: 使用，False: 不使用
-        :param name:  设备名
+        从配置项中删除一个设备的信息
+        :param name: 名称
         :return:
         """
-        for item in self._config['disk']:
-            if item['name'] == name:
-                item['use'] = use
-                break
-        self._save_config()
+        if name in self._config['devices']:
+            del self._config['devices'][name]
 
-    def remove_device(self, name):
-        """
-        删除一个设备
+        del self._config[name]
 
-        :param name: 设备名
-        :return:
-        """
-        for item in self._config['disk']:
-            if item['name'] == name:
-                self._config['disk'].remove(item)
-                break
-
-        if self._config[name]:
-            del self._config[name]
         self._save_config()
 
 

@@ -33,7 +33,7 @@ def device_change():
     :return:
     """
     from internal.server import server
-    from internal.driver import update_driver
+    from internal.fileSystem.driver import update_driver
 
     server.updateMountNodes()
     update_driver()

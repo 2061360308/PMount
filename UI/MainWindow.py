@@ -68,14 +68,8 @@ class MainWindow(MSFluentWindow):
             position=NavigationItemPosition.BOTTOM,
         )
 
-    def changeTheme(self):
-        if self.theme() == 'light':
-            self.setTheme('dark')
-        else:
-            self.setTheme('light')
-
     def initWindow(self):
-        self.resize(1100, 600)
+        self.resize(900, 400)
         self.setWindowIcon(QIcon(':/logo/logo/logo_64.ico'))
         self.setWindowTitle('PMount')
 
@@ -88,7 +82,6 @@ class MainWindow(MSFluentWindow):
     def closeEvent(self, event):
         event.accept()
         # 清理GUI所占资源 Todo 目前无效，需要修改
-        QTimer.singleShot(5, QApplication.instance().quit)
 
 
 if __name__ == '__main__':

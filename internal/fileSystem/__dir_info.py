@@ -6,8 +6,8 @@ import pythoncom
 import win32com.client
 
 from internal.log import get_logger
-from internal.driver import drivers_obj
-from internal.temp_fs import tempFs
+from internal.fileSystem.driver import drivers_obj
+from internal.fileSystem.temp_fs import tempFs
 from internal.system_res import dir_info_pool, dir_info_buffer, dir_info_dir_buffer, \
     dir_info_traversed_folder, stop_event
 
@@ -18,7 +18,6 @@ CACHE_TIMEOUT = 60
 
 class DirInfoManager:
     """ 映射资源路径 """
-    current_path = os.path.abspath(os.path.dirname(__file__))
 
     def __init__(self):
         self.pool = dir_info_pool  # 线程池，用于异步遍历目录

@@ -1,6 +1,6 @@
 import time
 
-from internal.dir_info import dirInfoManager
+from internal.fileSystem.dir_info import dirInfoManager
 
 dirInfoManager.readDirAsync("/百度网盘/序列1", 4)
 
