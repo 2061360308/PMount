@@ -1,6 +1,13 @@
+import os
+import threading
+
 from easydict import EasyDict
 
 from .api import BaiduNetdisk
+from .util import UploadTask
+from diskcache import Cache
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
 
 
 class Driver:
@@ -41,7 +48,8 @@ class Driver:
                     'isdir': item.isdir,
                     'size': item.size,
                     'mtime': item.server_mtime,
-                    'ctime': item.server_mtime
+                    'ctime': item.server_mtime,
+                    'md5': item.md5 if hasattr(item, 'md5') else None,
                 }
             }))
         return return_lists
@@ -99,3 +107,15 @@ class Driver:
     @property
     def headers(self):
         return {"User-Agent": "pan.baidu.com"}
+
+    def upload(self, cloud_fp, local_fp) -> UploadTask:
+        """
+        上传文件
+
+        :param cloud_fp: 云端文件路径
+        :param local_fp: 本地文件路径
+        :return:
+        """
+        task = UploadTask(cloud_fp, local_fp, os.path.getsize(local_fp))
+        threading.Thread(target=self.api.upload, args=(task,)).start()
+        return task

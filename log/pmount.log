@@ -15,3 +15,6 @@
 2024-08-05 16:37:16 | INFO     | internal.server.server:start:34 - 启动挂载设备
 2024-08-05 16:37:16 | INFO     | internal.server.MountManager:__init__:36 - - fuse 4 cloud driver (百度网盘) -
 2024-08-05 16:37:16 | INFO     | internal.server.server:start:39 - 启动管道服务
+2024-08-05 16:41:37 | INFO     | internal.server.server:start:34 - 启动挂载设备
+2024-08-05 16:41:37 | INFO     | internal.server.MountManager:__init__:36 - - fuse 4 cloud driver (百度网盘) -
+2024-08-05 16:41:37 | INFO     | internal.server.server:start:39 - 启动管道服务

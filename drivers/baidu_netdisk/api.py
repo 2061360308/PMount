@@ -1,3 +1,5 @@
+import hashlib
+import io
 import os
 import time
 from pprint import pprint
@@ -10,6 +12,8 @@ from urllib3.util.retry import Retry
 import json
 import logging
 from easydict import EasyDict
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from .util import UploadTask
 
 
 class BaiduNetdisk:
@@ -76,9 +80,11 @@ class BaiduNetdisk:
             error = self._refresh_token()
         return error
 
-    def request(self, furl, method, params, form_data=None, callback=None, rest=True):
+    def request(self, furl, method, params, form_data=None, files=None, callback=None, rest=True):
         # 拼接得到完整的请求url
-        if rest:
+        if furl.startswith("http") or furl.startswith("https"):
+            url = furl
+        elif rest:
             url = "https://pan.baidu.com/rest/2.0" + furl
         else:
             url = "https://pan.baidu.com" + furl
@@ -97,7 +103,11 @@ class BaiduNetdisk:
         elif method.upper() == "POST":
             if form_data is None:
                 form_data = {}
-            req = Request('POST', url, params=params, data=form_data)
+
+            if files is None:
+                req = Request('POST', url, params=params, data=form_data)
+            else:
+                req = Request('POST', url, params=params, data=form_data, files=files)
         else:
             raise ValueError("Unsupported HTTP method")
         # Use the session to prepare the request
@@ -125,9 +135,9 @@ class BaiduNetdisk:
         return self.request(furl=pathname, method="GET", params=params,
                             form_data=None, callback=callback, rest=rest)
 
-    def post(self, pathname, params, form_data=None, callback=None, rest=True):
+    def post(self, pathname, params, form_data=None, files=None, callback=None, rest=True):
         return self.request(furl=pathname, method="POST", params=params,
-                            form_data=form_data, callback=callback, rest=rest)
+                            form_data=form_data, files=files, callback=callback, rest=rest)
 
     def user_info(self):
         response = self.get("/xpan/nas", {"method": "uinfo"})
@@ -589,11 +599,153 @@ class BaiduNetdisk:
         response = self.get("/xpan/file", params)
         return response.text
 
+    def get_user_upload_size(self, file_size):
+        """
+        根据文件大小和会员等级智能选择分片大小
+        :param file_size: 文件大小（字节）
+        :return:
+        """
+        vip_type = self.user_info()['vip_type']
+
+        max_size = 4 * 1024 * 1024  # 普通用户只能固定4Mb
+
+        if vip_type == 0:
+            max_size = 4 * 1024 * 1024  # 普通用户只能固定4Mb
+        elif vip_type == 1:
+            max_size = 16 * 1024 * 1024  # Vip会员 16Mb
+        elif vip_type == 2:
+            max_size = 32 * 1024 * 1024  # SVip会员 32Mb
+
+        if file_size <= 100 * 1024 * 1024:  # 小于等于100MB
+            suggest = 4 * 1024 * 1024  # 4MB
+        elif file_size <= 500 * 1024 * 1024:  # 小于等于500MB
+            suggest = 8 * 1024 * 1024  # 8MB
+        elif file_size <= 1024 * 1024 * 1024:  # 小于等于1G
+            suggest = 16 * 1024 * 1024  # 16MB
+        else:  # 大于1G
+            suggest = 32 * 1024 * 1024
+
+        return min(suggest, max_size)
+
+    def upload(self, task: UploadTask):
+        """
+        上传文件
+        :param task: 上传任务对象
+        :return:
+        """
+
+        cloud_fp = task.cloud_fp
+        local_fp = task.local_fp
+
+        executor = ThreadPoolExecutor(max_workers=1)  # 线程池
+
+        chunk_size = self.get_user_upload_size(task.size)
+
+        print(chunk_size)
+
+        task.chunk_size = chunk_size
+
+        block_list = []
+
+        with open(local_fp, 'rb') as file:
+            while True:
+                chunk = file.read(chunk_size)
+                if not chunk:
+                    break
+                md5_hash = hashlib.md5(chunk).hexdigest()
+                block_list.append(md5_hash)
+
+        params = {
+            "method": "precreate"
+        }
+
+        form_data = {
+            "path": cloud_fp,
+            "size": task.size,
+            "isdir": 0,
+            "block_list": json.dumps(block_list),
+            "autoinit": 1
+        }
+
+        response = self.post("/xpan/file", params, form_data=form_data)
+
+        if "errno" in response.json():
+            raise Exception(response.json())
+
+        data = response.json()
+
+        uploadid = data["uploadid"]
+        task.uploadid = uploadid
+        task.total = len(block_list)
+        task.block_list = block_list
+
+        futures = []
+
+        for i, block in enumerate(block_list):
+            with open(local_fp, 'rb') as file:
+                file.seek(i * chunk_size)
+                chunk = file.read(chunk_size)
+                files = [
+                    ('file', ('chunk_{}'.format(i), io.BytesIO(chunk)))
+                ]
+                futures.append(executor.submit(self.upload_slice, cloud_fp, uploadid, i, files, task))
+
+        for future in as_completed(futures):
+            future.result()
+            task.completed += 1
+
+        params = {
+            "method": "create",
+        }
+
+        form_data = {
+            "path": cloud_fp,
+            "size": task.size,
+            "isdir": 0,
+            "uploadid": uploadid,
+            "block_list": json.dumps(block_list),
+            "rtype": 3,
+        }
+
+        response = self.post("/xpan/file", params, form_data=form_data)
+        task.md5 = response.json()["md5"]
+
+    def upload_slice(self, path, uploadid, partseq, files, task):
+        """
+        上传文件分片
+        :param path: 上传后使用的文件绝对路径，需要urlencode，需要与上一个阶段预上传precreate接口中的path保持一致
+        :param uploadid:  上一个阶段预上传precreate接口下发的uploadid
+        :param partseq:  文件分片的位置序号，从0开始，参考上一个阶段预上传precreate接口返回的block_list
+        :param files:  上传的文件内容
+        :param task: 任务对象
+        :return:
+        """
+        params = {
+            "method": "upload",
+            "type": "tmpfile",
+            "path": path,
+            "uploadid": uploadid,
+            "partseq": partseq,
+            # "access_token": self.access_token
+        }
+
+        start_time = time.time()
+
+        url = f"https://c3.pcs.baidu.com/rest/2.0/pcs/superfile2"
+
+        response = self.post(url, params=params, form_data={}, files=files)
+
+        # 发生错误
+        if "errno" in response.json():
+            raise Exception(response.json())
+
+        task.speed = task.chunk_size / (time.time() - start_time)
+
+
 if __name__ == '__main__':
-    baidu_netdisk = BaiduNetdisk(True)
-    # baidu_netdisk.refresh_access_token()
-    user_info = baidu_netdisk.get_m3u8("/计算机组成原理 6小时突击课/课时7 CPU的结构和功能 .mp4")
-    # print("user_info::")
-    pprint(user_info)
-    with open("x.m3u8", 'w+', encoding='utf-8') as f:
-        f.write(user_info)
+    from config import DriverConfig
+    config = DriverConfig("百度网盘", "baidu_netdisk")
+    baidu_netdisk = BaiduNetdisk(config)
+    # user_info = baidu_netdisk.user_info()
+    # pprint(user_info)
+    baidu_netdisk.upload("/test/PyQt-Fluent-Widgets-Gallery.7z", r"D:\LUAO\Desktop\PyQt-Fluent-Widgets-Gallery.7z")
