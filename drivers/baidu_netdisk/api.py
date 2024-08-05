@@ -540,8 +540,6 @@ class BaiduNetdisk:
         session = requests.Session()
         # 拼接access_token到url
         url = f'{url}&access_token={self.access_token}'
-        return url  # 直接返回url
-        print(url)
         # 发送 HEAD 请求
         response = session.head(url, allow_redirects=False, headers={'User-Agent': 'pan.baidu.com'})
         # 从响应头中获取最终的下载链接
@@ -558,8 +556,10 @@ class BaiduNetdisk:
         
         """
         res_url = self.files(fsids, dlink=1).list[0].dlink
+
+        url = f'{res_url}&access_token={self.access_token}'
         # return res_url
-        return self.get_final_download_link(res_url)
+        return url
 
     def path_to_fsid(self, path):
         """

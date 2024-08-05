@@ -16,10 +16,8 @@ try:
 except ImportError:
     pass
 from fuse import Operations, _libfuse, FUSE
-from internal.log import get_logger, funcLog
 from internal.fileSystem import fileSystem
-
-logger = get_logger(__name__)
+from log import logger
 
 PRELOAD_LEVEL = 4
 CACHE_TIMEOUT = 60
@@ -35,7 +33,7 @@ class CloudFS(Operations):
         """
         self.device = device
 
-        logger.info("- fuse 4 cloud driver -")
+        logger.info(f"- fuse 4 cloud driver ({self.device.name}) -")
         self.avail, self.total_size, self.used = fileSystem.disk_quota(self.device)  # 初始化磁盘空间大小
         fileSystem.readDirAsync(self.device, "/", PRELOAD_LEVEL)  # 预读根目录(默认深度为2)
 
@@ -52,8 +50,7 @@ class CloudFS(Operations):
         self.device.status = DeviceStatus.MOUNTED  # 更改设备状态为挂载成功
         self.device.changeSignal.send("status_change", device=self.device)  # 发送状态改变信号
 
-
-    @funcLog
+    @logger.catch
     def getattr(self, path, fh=None):
         '''
         Returns a dictionary with keys identical to the stat C structure of
@@ -67,7 +64,7 @@ class CloudFS(Operations):
         '''
         return fileSystem.getattr(self.device, path, fh)
 
-    @funcLog
+    @logger.catch
     def truncate(self, path, length, fh=None):
         """
         更改文件大小
@@ -82,7 +79,7 @@ class CloudFS(Operations):
         # self.create(path, None)
         # self.writing_files[path]["uploading_tmp"].truncate(length)
 
-    @funcLog
+    @logger.catch
     def readdir(self, path, offset):
         """
         读取目录的内容。列出目录中的文件和子目录。
@@ -174,7 +171,7 @@ class CloudFS(Operations):
         '''
         pass
 
-    @funcLog
+    @logger.catch
     def mkdir(self, path, mode):
         # TODO: 完善接口的上传等相关功能
         pass
@@ -188,7 +185,7 @@ class CloudFS(Operations):
     def release(self, path, fh):
         return 0
 
-    @funcLog
+    @logger.catch
     def create(self, path, mode, fh=None):
         pass
         # Todo
@@ -241,4 +238,3 @@ def unmount(device):
         except Exception as e:
             print(e)
             print(f"卸载设备 {device.name} 失败")
-

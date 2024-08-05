@@ -1,3 +1,4 @@
+import asyncio
 import queue
 import time
 from collections import deque
@@ -92,7 +93,7 @@ class TempFs:
             self.weight.appendleft(key)
 
         # 生成一个文件路径
-        file_path = os.path.join(self.root, key[:2], key[2:4] + suffix)
+        file_path = os.path.join(self.root, key[:2], key[2:] + suffix)
         # 储存文件元信息
         data = {
             'path': file_path,
@@ -184,7 +185,14 @@ class TempFs:
         if key not in self.meta:
             raise KeyError(f'key {driver_name} and {uid} not exists')
 
-        self.remove_file_sync(self.meta[key]['path'])
+        # self.remove_file_sync(self.meta[key]['path'])
+        # 获取当前事件循环，如果没有运行的事件循环则创建一个新的
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+        # 使用 asyncio.create_task 调度删除操作
+        loop.create_task(self.remove_file_sync(self.meta[key]['path']))
         self.meta['size'] -= self.meta[key]['size']
         self.weight.remove(key)
         del self.meta[key]
@@ -229,7 +237,7 @@ class TempFs:
 
         self.update_weight(key)
 
-    def get(self, driver_name: str, uid):
+    def get(self, driver_name: str, uid) -> str:
         """
         获取缓存文件的路径
 

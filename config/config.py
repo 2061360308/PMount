@@ -21,15 +21,15 @@ class ConfigManager:
         if not os.path.exists(self.configPath):
             with open(self.configPath, 'w+', encoding='utf-8') as f:
                 f.write(yaml.dump({
-                    'disk': [],
+                    'devices': {},
                     'temp': {
                         'dir': {
                             'CACHE_TIMEOUT': 60,
                             'PRELOAD_LEVEL': 2,
                         },
                         'file': {
-                            'CACHE_TIMEOUT': 604800,
-                            'MAX_CACHE_SIZE': 10737418240,
+                            'CACHE_TIMEOUT': 36,
+                            'MAX_CACHE_SIZE': 18,
                             'ROOT': './temp'
                         }
                     }

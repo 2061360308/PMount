@@ -4,3 +4,7 @@ PySide6
 PySide6-Fluent-Widgets
 fusepy
 diskcache
+requests
+pyyaml
+blinker
+loguru

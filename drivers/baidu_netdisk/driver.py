@@ -84,3 +84,18 @@ class Driver:
         :return:
         """
         return self.api.delete(filePath)
+
+    def download_url(self, path):
+        """
+        获取下载链接
+
+        :param path:
+        :return:
+        """
+        fsid = self.api.path_to_fsid(path)
+        url = self.api.get_res_url(fsid)
+        return url
+
+    @property
+    def headers(self):
+        return {"User-Agent": "pan.baidu.com"}

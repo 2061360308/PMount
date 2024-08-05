@@ -44,6 +44,10 @@ PMount的安装包可以在[GitHub Release](#)
 ```shell
 python -m nuitka --standalone --include-data-dir=drivers=drivers --include-data-file=config/config.yml=config/config.yml --include-data-file=logo.ico=logo.ico --plugin-enable=pyside6 --lto=yes --windows-icon-from-ico=./logo.ico --output-filename=PMount.exe --output-dir=./output run.py
 ```
+打包 PMountTaskTool 工具
+```shell
+python -m nuitka --onefile --windows-console-mode=disable --lto=yes --windows-icon-from-ico=./logo.ico --output-filename=PMountTaskTool.exe --output-dir=./output chore/PMountTaskTool.py
+```
 
 ***编译qrc资源***
 ```shell

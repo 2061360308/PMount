@@ -1,13 +1,18 @@
 # 启动服务
+import json
 import os.path
+import sys
 import threading
+
+from PySide6.QtCore import QCoreApplication
+from PySide6.QtWidgets import QApplication
 from blinker import signal
 from internal.server.device import Device, DeviceStatus
 from internal.server.MountManager import mount, unmount
-
+from internal.server.pipe import pipeServer
+from internal.fileSystem import fileSystem, DownloadStatus, tempFs
 from config import config, update_config, add_device_config, remove_device_config
-
-from internal.system_res import mount_thread, stop_event
+from log import logger
 
 
 class Server:
@@ -26,9 +31,14 @@ class Server:
         启动所有已启用的设备
         :return:
         """
+        logger.info("启动挂载设备")
         for name, device in self.devices.items():
             if device.use:
                 mount(device)
+
+        logger.info("启动管道服务")
+        pipeServer.start()  # 启动管道服务
+        pipeServer.messageSignal.connect(self.new_tool_signal)  # 管道消息信号
 
     def stop(self):
         """
@@ -97,6 +107,27 @@ class Server:
         :return:
         """
         self.deviceChange.send(event, device=device)  # 发送设备状态改变信号
+
+    def new_tool_signal(self, message):
+        """
+        PMountTaskTool工具发来新的信号
+        :param message: 消息内容
+        :return:
+        """
+        # 解析数据
+        logger.info(f"New download task: {json.loads(message)}")
+        data = json.loads(message)
+        device = self.devices.get(data["device"])
+        path = data["path"]
+
+        workdir = data["workdir"].replace("\\", "/")
+
+        if workdir.startswith(device.path.replace("\\", "/")):
+            # 打开操作
+            fileSystem.view(device, path)
+        else:
+            # 复制操作
+            fileSystem.download_copy(device, path, workdir)
 
 
 server = Server()

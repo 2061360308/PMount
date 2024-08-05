@@ -127,8 +127,8 @@ class TrayIcon:
             time.sleep(0.1)
             win32gui.PumpWaitingMessages()
 
-    def run_detached(self):
-        '''非阻塞(须有父进程)'''
-        t = Thread(target=a.run)
-        t.daemon = True
-        t.start()
+    # def run_detached(self):
+    #     '''非阻塞(须有父进程)'''
+    #     t = Thread(target=a.run)
+    #     t.daemon = True
+    #     t.start()

@@ -12,7 +12,7 @@ from qfluentwidgets import (SwitchButton, ToolButton)
 import res.resource_rc
 from internal.server import server, DeviceStatus
 from UI import public
-from internal.util import import_meta_modules, device_change
+from internal.util import import_meta_modules
 
 
 class ThreeColumnLayout(QWidget):

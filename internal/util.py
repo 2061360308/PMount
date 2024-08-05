@@ -18,23 +18,3 @@ def import_meta_modules(package_name):
                 print(f"No meta.py found in {full_package_name}")
 
     return meta_list
-
-
-def device_change():
-    """
-    设备列表改变（新增 或 删除）
-
-    需要提前更新好config，然后调用此函数，
-    用于更新server以及drivers_obj
-
-    :param config:
-    :param device:
-    :param driver:
-    :return:
-    """
-    from internal.server import server
-    from internal.fileSystem.driver import update_driver
-
-    server.updateMountNodes()
-    update_driver()
-    print("设备列表改变")

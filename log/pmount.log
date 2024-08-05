@@ -1,0 +1,17 @@
+2024-08-05 16:26:42 | INFO     | internal.server.server:start:34 - 启动挂载设备
+2024-08-05 16:26:42 | INFO     | internal.server.server:start:39 - 启动管道服务
+2024-08-05 16:27:45 | INFO     | internal.server.server:start:34 - 启动挂载设备
+2024-08-05 16:27:45 | INFO     | internal.server.server:start:39 - 启动管道服务
+2024-08-05 16:28:09 | INFO     | internal.server.server:start:34 - 启动挂载设备
+2024-08-05 16:28:09 | INFO     | internal.server.server:start:39 - 启动管道服务
+2024-08-05 16:29:19 | INFO     | internal.server.server:start:34 - 启动挂载设备
+2024-08-05 16:29:19 | INFO     | internal.server.server:start:39 - 启动管道服务
+2024-08-05 16:33:39 | INFO     | internal.server.server:start:34 - 启动挂载设备
+2024-08-05 16:33:39 | INFO     | internal.server.MountManager:__init__:36 - - fuse 4 cloud driver -
+2024-08-05 16:33:39 | INFO     | internal.server.server:start:39 - 启动管道服务
+2024-08-05 16:34:36 | INFO     | internal.server.server:start:34 - 启动挂载设备
+2024-08-05 16:34:36 | INFO     | internal.server.MountManager:__init__:36 - - fuse 4 cloud driver (百度网盘) -
+2024-08-05 16:34:36 | INFO     | internal.server.server:start:39 - 启动管道服务
+2024-08-05 16:37:16 | INFO     | internal.server.server:start:34 - 启动挂载设备
+2024-08-05 16:37:16 | INFO     | internal.server.MountManager:__init__:36 - - fuse 4 cloud driver (百度网盘) -
+2024-08-05 16:37:16 | INFO     | internal.server.server:start:39 - 启动管道服务

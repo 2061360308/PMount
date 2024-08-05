@@ -9,6 +9,8 @@
   </qresource>
   <qresource prefix="icon">
     <file>icon/日夜.svg</file>
-    <file>icon/设备.svg</file>
+  </qresource>
+  <qresource prefix="image">
+    <file>image/cyan_bg.png</file>
   </qresource>
 </RCC>

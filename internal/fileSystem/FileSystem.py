@@ -1,21 +1,28 @@
 import errno
 import math
 import os
+import shutil
+import sys
 import time
 import winreg
 
 import pythoncom
 import win32com.client
+from PySide6.QtCore import QCoreApplication
+from PySide6.QtWidgets import QApplication
 from fuse import FuseOSError
 
-from internal.log import get_logger
-from internal.fileSystem.temp_fs import tempFs
+from log import logger
+from .file_transfer import fileTransferManager, DownloadDialog
+from .temp_fs import tempFs
 from internal.system_res import dir_info_pool, dir_info_buffer, dir_info_dir_buffer, \
     dir_info_traversed_folder, stop_event
 
-logger = get_logger(__name__)
-
 CACHE_TIMEOUT = 60
+
+current_path = os.path.dirname(os.path.abspath(__file__))
+
+PMountTaskToolPath = os.path.join(current_path, "../../PMountTaskTool.exe")
 
 
 def expand_icon_path(icon_path):
@@ -128,6 +135,7 @@ def create_shortcut(target_path, shortcut_path, description, working_dir, argume
     shortcut.Arguments = arguments
     shortcut.Description = description  # 设置鼠标悬浮提示信息
     shortcut.IconLocation = f"{icon_location},{icon_index}"
+    shortcut.WindowStyle = 7  # 7 表示隐藏窗口
     shortcut.save()
 
 
@@ -143,6 +151,16 @@ def format_size(size_bytes):
     return f"{s} {size_name[i]}"
 
 
+def show_download_dialog(task):
+    if QApplication.instance() is None:
+        app = QApplication(sys.argv)
+    else:
+        app = QCoreApplication.instance()
+    downloadDialog = DownloadDialog()
+    downloadDialog.showDialog(task)
+    app.exec()
+
+
 class FileSystem:
 
     def __init__(self):
@@ -153,6 +171,9 @@ class FileSystem:
         self.traversed_folder = dir_info_traversed_folder  # 缓存已经遍历的目录
 
         self.file_icon = {}  # 文件图标缓存
+        self.view_task = []  # 查看任务
+        self.download_copy_task = {}  # 下载复制任务
+        fileTransferManager.taskComplete.connect(self.cloud_download_complete)
 
     def disk_quota(self, device):
         """
@@ -251,34 +272,35 @@ class FileSystem:
                             else:
                                 temp_path = tempFs.allocate(name, item.path + '.lnk', 0, suffix=".lnk")
                                 # 获取文件后缀
-                            suffix = os.path.splitext(item['path'])[1]
-                            # 获取文件类型描述
-                            description = get_file_type_description(suffix)
-                            # 获取文件图标
-                            if suffix in self.file_icon:
-                                icon_path, icon_index = self.file_icon[suffix]
-                            else:
-                                default_icon = get_default_icon(suffix)
-                                if default_icon:
-                                    icon_path, icon_index = default_icon
+                                suffix = os.path.splitext(item['path'])[1]
+                                # 获取文件类型描述
+                                description = get_file_type_description(suffix)
+                                # 获取文件图标
+                                if suffix in self.file_icon:
+                                    icon_path, icon_index = self.file_icon[suffix]
                                 else:
-                                    icon_path, icon_index = "", 0
-                                self.file_icon[suffix] = (icon_path, icon_index)
-                            create_shortcut(
-                                target_path="",
-                                shortcut_path=temp_path,
-                                description=f"类型:{description}\n大小:{format_size(item.info.size)}\n提示:双击可自动下载并打开",
-                                working_dir=os.path.dirname(item['path']),
-                                arguments="",
-                                icon_location=icon_path,
-                                icon_index=icon_index
-                            )
+                                    default_icon = get_default_icon(suffix)
+                                    if default_icon:
+                                        icon_path, icon_index = default_icon
+                                    else:
+                                        icon_path, icon_index = "", 0
+                                    self.file_icon[suffix] = (icon_path, icon_index)
+                                create_shortcut(
+                                    target_path='cmd.exe',
+                                    shortcut_path=temp_path,
+                                    description=f"类型:{description}\n大小:{format_size(item.info.size)}\n提示:双击可自动下载并打开",
+                                    working_dir=os.path.join(device.path, os.path.dirname(item['path'])[1:]),
+                                    arguments=f' /c {PMountTaskToolPath} -d "{device.name}" -p "{item.path}"',
+                                    icon_location=icon_path,
+                                    icon_index=icon_index
+                                )
 
-                            tempFs.update(name, item.path + '.lnk', size=os.path.getsize(temp_path))
-                            # 添加文件的快捷方式
-                            items.append(f"{item['name']}.lnk")
+                                tempFs.update(name, item.path + '.lnk', size=os.path.getsize(temp_path))
+
                             # 更新文件的大小属性
                             item.info.size = os.path.getsize(temp_path)
+                            # 添加文件的快捷方式
+                            items.append(f"{item['name']}.lnk")
 
                     self.add_file_attr(f"{name}@@{item['path']}", item.info)  # 将文件属性加入缓存
 
@@ -290,7 +312,7 @@ class FileSystem:
                 self.dir_buffer[f"{name}@@{path}"] = items
 
             except Exception as s:
-                logger.exception(s)
+                logger.error(f"读取目录失败: {s}")
 
     def readDirAsync(self, device, path: str, depth: int):
         """
@@ -312,12 +334,22 @@ class FileSystem:
 
     def read(self, device, path, size, offset, fh):
         name = device.name
+
+        # 访问的时候先尝试访问原文件，如果不存在再访问快捷方式
+        # if path.endswith(".lnk"):
+        #     path = path[:-4]
+
         if tempFs.has(name, path):
             file_path = tempFs.get(name, path)
-        elif tempFs.has(name, path + ".lnk"):
-            file_path = tempFs.get(name, path + ".lnk")
         else:
             raise FuseOSError(errno.ENOENT)
+
+        # if tempFs.has(name, path):
+        #     file_path = tempFs.get(name, path)
+        # elif tempFs.has(name, path + ".lnk"):
+        #     file_path = tempFs.get(name, path + ".lnk")
+        # else:
+        #     raise FuseOSError(errno.ENOENT)
 
         with open(file_path, 'rb') as f:
             f.seek(offset)
@@ -376,6 +408,8 @@ class FileSystem:
 
         self.readDirAsync(name, path, PRELOAD_LEVEL)  # 异步读取目录
 
+        # print(f"getdirs: {name}@@{path}")
+
         if f'{name}@@{path}' in self.dir_buffer:  # 在缓存中的话就读取对应缓存内容
             for r in self.dir_buffer[f'{name}@@{path}']:
                 yield r.strip('/')
@@ -383,6 +417,91 @@ class FileSystem:
             files = ['.', '..']
             for r in files:
                 yield r
+
+    def view(self, device, path):
+        """
+        打开文件(宏观层面的打开，不是系统的打开文件读取)
+        :return:
+        """
+        for task in self.view_task:
+            if task.device == device and task.device_fp == path:
+                return  # 如果已经在下载队列中就不再处理
+
+        if not tempFs.has(device.name, path):
+            task = fileTransferManager.add(device, path)
+            self.view_task.append(task)
+            show_download_dialog(task)  # 显示下载对话框
+
+        file_path = f'{device.path}{path}'
+        if os.path.isfile(file_path):
+            os.startfile(file_path)
+        else:
+            print('erro, 下载完发现没有文件')
+
+    def download_copy(self, device, path, workdir):
+        """
+        下载文件(用户复制快捷方式到其他位置后双击打开触发此下载操作)
+        :return:
+        """
+        for task in self.download_copy_task.keys():
+            if task.device == device and task.device_fp == path:
+                return  # 如果已经在下载队列中就不再处理
+
+        if not tempFs.has(device.name, path):
+            task = fileTransferManager.add(device, path)
+            self.download_copy_task[task] = workdir
+            show_download_dialog(task)  # 显示下载对话框
+
+        # 复制文件
+        file_path_src = tempFs.get(device.name, path)
+        file_name = os.path.split(path)[1]
+        file_path_dst = os.path.join(workdir, file_name)
+        shutil.copy2(file_path_src, file_path_dst)
+
+    def cloud_download_complete(self, task):
+        """
+        云端下载任务完成
+
+        :param task:
+        :return:
+        """
+        # 更新目录缓存
+        self.update_download_file_cache(task.device, task.device_fp)
+
+        # 重新调用文件操作
+        if task in self.view_task:
+            self.view_task.remove(task)
+            self.view(device=task.device, path=task.device_fp)
+        elif task in self.download_copy_task:
+            workdir = self.download_copy_task[task]
+            del self.download_copy_task
+            self.download_copy(device=task.device, path=task.device_fp, workdir=workdir)
+
+    def update_download_file_cache(self, device, path):
+        """
+        文件下载之后 更新对应的缓存
+
+        :param device: 所属的设备对象
+        :param path: 文件路径
+        :param value: 文件信息
+        :return:
+        """
+        parentDir, fileName = os.path.split(path)  # 文件夹路径 文件名
+        if f'{device.name}@@{parentDir}' in self.dir_buffer:
+            children_list = self.dir_buffer[f'{device.name}@@{parentDir}']
+            if f'{fileName}.lnk' in children_list:
+                children_list.remove(f'{fileName}.lnk')
+                children_list.append(fileName)
+                self.dir_buffer[f'{device.name}@@{parentDir}'] = children_list
+
+        # 更新文件的大小属性
+        if tempFs.has(device.name, path):
+            file_path = tempFs.get(device.name, path)
+            size = os.path.getsize(file_path)
+            if f"{device.name}@@{path}" in self.buffer:
+                attr = self.buffer[f"{device.name}@@{path}"]
+                attr['st_size'] = size
+                self.buffer[f"{device.name}@@{path}"] = attr
 
 
 fileSystem = FileSystem()

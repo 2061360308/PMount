@@ -7,3 +7,4 @@ diskcache
 requests
 pyyaml
 blinker
+loguru
