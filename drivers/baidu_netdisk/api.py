@@ -582,6 +582,17 @@ class BaiduNetdisk:
 
         return fsid
 
+    def get_md5(self, path):
+        """
+        获取文件md5
+        :param path: 文件路径
+        :return:
+        """
+        dir, file = os.path.split(path)
+        md5 = self.search(file, dir=dir).list[0].md5
+
+        return md5
+
     def get_m3u8(self, path, definition_type=1080):
         """
         获取m3u8文件
@@ -740,6 +751,21 @@ class BaiduNetdisk:
             raise Exception(response.json())
 
         task.speed = task.chunk_size / (time.time() - start_time)
+
+    def mkdir(self, path):
+        params = {
+            "method": "create",
+        }
+
+        form_data = {
+            "path": path,
+            "isdir": 1,
+            "rtype": 0,
+        }
+
+        response = self.post("/xpan/file", params=params, form_data=form_data)
+
+        return response.json()
 
 
 if __name__ == '__main__':

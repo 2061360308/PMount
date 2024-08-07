@@ -87,7 +87,9 @@ class DownloadTask:
             suffix = os.path.splitext(self.device_fp)[-1]
             if tempFs.has(self.device.name, self.device_fp):
                 tempFs.remove(self.device.name, self.device_fp)
-            self.temp_fp = tempFs.allocate(self.device.name, self.device_fp, self.size, suffix)
+
+            md5 = self.device.driver.md5(self.device_fp)
+            self.temp_fp = tempFs.allocate(self.device.name, self.device_fp, self.size, suffix, md5)
         return self.temp_fp
 
     @property

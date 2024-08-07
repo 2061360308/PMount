@@ -20,6 +20,8 @@ from internal.system_res import dir_info_pool, dir_info_buffer, dir_info_dir_buf
 
 CACHE_TIMEOUT = 60
 
+PRELOAD_LEVEL = 2  # 预加载层级
+
 current_path = os.path.dirname(os.path.abspath(__file__))
 
 PMountTaskToolPath = os.path.join(current_path, "../../PMountTaskTool.exe")
@@ -175,6 +177,11 @@ class FileSystem:
         self.download_copy_task = {}  # 下载复制任务
         fileTransferManager.taskComplete.connect(self.cloud_download_complete)
 
+        self.file_handle = {}  # 文件句柄
+        self.handle_counter = 0
+        self.uid = self.__get_current_uid()
+        self.gid = self.__get_current_gid()
+
     def disk_quota(self, device):
         """
         获取存储方案的配额
@@ -196,7 +203,25 @@ class FileSystem:
 
         return avail, total_size, used
 
-    def add_file_attr(self, path: str, info):
+    def __get_current_uid(self):
+        """获取当前用户的 UID"""
+        if os.name == 'nt':
+            # Windows 系统，使用当前用户名的哈希值作为 UID
+            return hash(os.getlogin())
+        else:
+            # Unix 系统，使用实际的 UID
+            return os.getuid()
+
+    def __get_current_gid(self):
+        """获取当前用户的 GID"""
+        if os.name == 'nt':
+            # Windows 系统，使用固定的 GID 值
+            return 0
+        else:
+            # Unix 系统，使用实际的 GID
+            return os.getgid()
+
+    def __add_file_attr(self, path: str, info):
         """
         创建属性
 
@@ -216,10 +241,10 @@ class FileSystem:
         fileAttr = {
             'st_ino': 0,
             'st_dev': 0,
-            'st_mode': 16877 if info['isdir'] else 36279,
+            'st_mode': 0o040777 if info['isdir'] else 0o100777,
             'st_nlink': 2 if info['isdir'] else 1,
-            'st_uid': 0,
-            'st_gid': 0,
+            'st_uid': self.uid,
+            'st_gid': self.gid,
             'st_size': int(info['size']) if 'size' in info else 0,
             'st_atime': 0,
             'st_mtime': info['local_mtime'] if 'local_mtime' in info else info['mtime'],
@@ -228,7 +253,7 @@ class FileSystem:
 
         self.buffer[path] = fileAttr
 
-    def readDir(self, device, path: str, depth: int):
+    def __readDir(self, device, path: str, depth: int):
         """
         读取目录
 
@@ -261,16 +286,23 @@ class FileSystem:
                     if item.info.isdir:
                         items.append(item['name'])  # 文件夹直接添加
                     else:
-                        # # 缓存文件里有这个文件，直接添加文件本身
-                        if tempFs.has(name, item.path):
+                        # 缓存文件里有这个文件，直接添加文件本身
+                        hasFile = False
+                        if tempFs.has(name, item.path):  # 缓存是否有这个文件
+                            if tempFs.get_md5(name, item.path) == item.info.md5:  # 文件未变化
+                                hasFile = True
+                            else:
+                                tempFs.remove(name, item.path)  # 文件变化，删除缓存
+
+                        if hasFile:
                             items.append(item['name'])
                         else:
-                            # pass
                             # 缓存文件中有这个文件的快捷方式
                             if tempFs.has(name, item.path + '.lnk'):
                                 temp_path = tempFs.get(name, item.path + '.lnk')
                             else:
-                                temp_path = tempFs.allocate(name, item.path + '.lnk', 0, suffix=".lnk")
+                                temp_path = tempFs.allocate(name, item.path + '.lnk', 0, suffix=".lnk",
+                                                            md5=item.info.md5)
                                 # 获取文件后缀
                                 suffix = os.path.splitext(item['path'])[1]
                                 # 获取文件类型描述
@@ -302,19 +334,19 @@ class FileSystem:
                             # 添加文件的快捷方式
                             items.append(f"{item['name']}.lnk")
 
-                    self.add_file_attr(f"{name}@@{item['path']}", item.info)  # 将文件属性加入缓存
+                    self.__add_file_attr(f"{name}@@{item['path']}", item.info)  # 将文件属性加入缓存
 
                     # 如果还有剩余允许深度，且遇到目录则继续遍历
                     if depth > 0:
                         if item.info.isdir:
-                            self.readDirAsync(device, item['path'], depth)
+                            self.__readDirAsync(device, item['path'], depth)
 
                 self.dir_buffer[f"{name}@@{path}"] = items
 
             except Exception as s:
                 logger.error(f"读取目录失败: {s}")
 
-    def readDirAsync(self, device, path: str, depth: int):
+    def __readDirAsync(self, device, path: str, depth: int):
         """
         异步读取目录
 
@@ -330,30 +362,66 @@ class FileSystem:
         if stop_event.is_set():
             return
 
-        self.pool.submit(self.readDir, device, path, depth)
+        self.pool.submit(self.__readDir, device, path, depth)
 
-    def read(self, device, path, size, offset, fh):
+    def preReadDir(self, device):
+        """
+        预读目录
+
+        :return:
+        """
+        self.__readDirAsync(device, "/", PRELOAD_LEVEL)
+
+    def open(self, device, path, flags):
+        """
+        打开文件句柄
+        :param device:
+        :param path:
+        :param flags:
+        :return:
+        """
         name = device.name
-
-        # 访问的时候先尝试访问原文件，如果不存在再访问快捷方式
-        # if path.endswith(".lnk"):
-        #     path = path[:-4]
 
         if tempFs.has(name, path):
             file_path = tempFs.get(name, path)
         else:
             raise FuseOSError(errno.ENOENT)
 
-        # if tempFs.has(name, path):
-        #     file_path = tempFs.get(name, path)
-        # elif tempFs.has(name, path + ".lnk"):
-        #     file_path = tempFs.get(name, path + ".lnk")
-        # else:
-        #     raise FuseOSError(errno.ENOENT)
+        # 根据 flags 确定模式
+        if flags & os.O_RDWR:
+            mode = 'r+b'
+        elif flags & os.O_WRONLY:
+            mode = 'wb'
+        else:
+            mode = 'rb'
 
-        with open(file_path, 'rb') as f:
-            f.seek(offset)
-            return f.read(size)
+        mode = 'r+b'
+
+        # 打开文件并存储文件对象
+        file_obj = open(file_path, mode)
+
+        # 生成唯一的整数句柄
+        self.handle_counter += 1
+        handle = self.handle_counter
+
+        # 存储句柄和文件对象的映射关系
+        self.file_handle[handle] = file_obj
+        return handle
+
+    def read(self, device, path, size, offset, fh):
+        handel = self.file_handle[fh]
+        handel.seek(offset)
+        return handel.read(size)
+
+    def release(self, device, path, fh):
+        handel = self.file_handle[fh]
+        handel.close()
+        del self.file_handle[fh]
+        return fh
+
+    def write(self, device, path, data, offset, fp):
+        os.lseek(fp, offset, os.SEEK_SET)
+        return os.write(fp, data)
 
     def getattr(self, device, path, fh=None):
         name = device.name
@@ -371,7 +439,7 @@ class FileSystem:
                 attr = {
                     'st_ino': 0,
                     'st_dev': 0,
-                    'st_mode': 16877,
+                    'st_mode': 0o040777,
                     'st_nlink': 2,
                     'st_uid': 0,
                     'st_gid': 0,
@@ -385,7 +453,7 @@ class FileSystem:
         # 这里是同步堵塞读取，以便下方总能查找到信息
         parentDir = os.path.dirname(path)
         if f'{name}@@{parentDir}' not in self.dir_buffer:
-            self.readDir(device, parentDir, 1)
+            self.__readDir(device, parentDir, 1)
 
         # 查看缓存中是否有这个文件的缓存
         if f'{name}@@{path}' in self.buffer:
@@ -406,7 +474,7 @@ class FileSystem:
         name = device.name
         PRELOAD_LEVEL = 2  # 预加载层级
 
-        self.readDirAsync(name, path, PRELOAD_LEVEL)  # 异步读取目录
+        self.__readDirAsync(name, path, PRELOAD_LEVEL)  # 异步读取目录
 
         # print(f"getdirs: {name}@@{path}")
 
@@ -477,6 +545,39 @@ class FileSystem:
             del self.download_copy_task
             self.download_copy(device=task.device, path=task.device_fp, workdir=workdir)
 
+    def update_file_size(self, device, path):
+        """
+        更新文件大小
+
+        :param device: 设备对象
+        :param path: 文件路径
+        :param size: 文件大小
+        :return:
+        """
+        # 更新文件的大小属性
+        if tempFs.has(device.name, path):
+            file_path = tempFs.get(device.name, path)
+            size = os.path.getsize(file_path)
+            if f"{device.name}@@{path}" in self.buffer:
+                attr = self.buffer[f"{device.name}@@{path}"]
+                attr['st_size'] = size
+                self.buffer[f"{device.name}@@{path}"] = attr
+
+    def update_folder_cache(self, device, path, name, type='add', old=''):
+        if f'{device.name}@@{path}' in self.dir_buffer:
+            children_list = self.dir_buffer[f'{device.name}@@{path}']
+
+            if type == 'add':
+                children_list.append(name)
+            elif type == 'remove':
+                children_list.remove(name)
+            else:
+                if old in children_list:
+                    children_list.remove(old)
+                    children_list.append(name)
+
+            self.dir_buffer[f'{device.name}@@{path}'] = children_list
+
     def update_download_file_cache(self, device, path):
         """
         文件下载之后 更新对应的缓存
@@ -486,22 +587,85 @@ class FileSystem:
         :param value: 文件信息
         :return:
         """
-        parentDir, fileName = os.path.split(path)  # 文件夹路径 文件名
-        if f'{device.name}@@{parentDir}' in self.dir_buffer:
-            children_list = self.dir_buffer[f'{device.name}@@{parentDir}']
-            if f'{fileName}.lnk' in children_list:
-                children_list.remove(f'{fileName}.lnk')
-                children_list.append(fileName)
-                self.dir_buffer[f'{device.name}@@{parentDir}'] = children_list
+        parentDir = os.path.dirname(path)  # 文件夹路径
+        fileName = os.path.basename(path)  # 文件名
+        old = fileName + '.lnk'
+        # 更新目录缓存
+        self.update_folder_cache(device, parentDir, fileName, type='update', old=old)
+        # if f'{device.name}@@{parentDir}' in self.dir_buffer:
+        #     children_list = self.dir_buffer[f'{device.name}@@{parentDir}']
+        #     if f'{fileName}.lnk' in children_list:
+        #         children_list.remove(f'{fileName}.lnk')
+        #         children_list.append(fileName)
+        #         self.dir_buffer[f'{device.name}@@{parentDir}'] = children_list
 
         # 更新文件的大小属性
-        if tempFs.has(device.name, path):
-            file_path = tempFs.get(device.name, path)
-            size = os.path.getsize(file_path)
-            if f"{device.name}@@{path}" in self.buffer:
-                attr = self.buffer[f"{device.name}@@{path}"]
-                attr['st_size'] = size
-                self.buffer[f"{device.name}@@{path}"] = attr
+        self.update_file_size(device, path)
+        # if tempFs.has(device.name, path):
+        #     file_path = tempFs.get(device.name, path)
+        #     size = os.path.getsize(file_path)
+        #     if f"{device.name}@@{path}" in self.buffer:
+        #         attr = self.buffer[f"{device.name}@@{path}"]
+        #         attr['st_size'] = size
+        #         self.buffer[f"{device.name}@@{path}"] = attr
+
+    def mkdir(self, device, path, mode):
+        """
+        创建目录
+
+        :param device: 设备对象
+        :param path: 要创建的目录路径
+        :return:
+        """
+        parentDir = os.path.dirname(path)  # 文件夹路径
+        name = os.path.basename(path)  # 文件夹名
+        children_list = self.dir_buffer.get(f'{device.name}@@{parentDir}', [])
+        if name in children_list:
+            return
+
+        response = device.driver.mkdir(path)
+        if 'errno' in response and response['errno'] == -8:
+            # 文件已存在
+            raise FuseOSError(errno.EEXIST)
+
+        # 更新目录缓存
+        self.update_folder_cache(device, parentDir, name)
+
+        attr = {
+            'st_ino': 0,
+            'st_dev': 0,
+            'st_mode': 0o040777,
+            'st_nlink': 2,
+            'st_uid': 0,
+            'st_gid': 0,
+            'st_size': 0,
+            'st_atime': 0,
+            'st_mtime': time.time(),
+            'st_ctime': time.time()
+        }
+        # 更新属性缓存
+        self.buffer[f'{device.name}@@{path}'] = attr
+
+    def rename(self, device, old, new):
+        """
+        重命名文件
+
+        :param device: 设备对象
+        :param old: 旧路径
+        :param new: 新路径
+        :return:
+        """
+        device.driver.rename(old, new)
+
+        parentDir = os.path.dirname(old)
+        old_name = os.path.basename(old)
+        new_name = os.path.basename(new)
+
+        # 更新目录缓存
+        self.update_folder_cache(device, parentDir, new_name, type='update', old=old_name)
+        # 更新属性缓存
+        if f'{device.name}@@{old}' in self.buffer:
+            self.buffer[f'{device.name}@@{new}'] = self.buffer.pop(f'{device.name}@@{old}')
 
 
 fileSystem = FileSystem()

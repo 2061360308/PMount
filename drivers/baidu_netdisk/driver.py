@@ -119,3 +119,21 @@ class Driver:
         task = UploadTask(cloud_fp, local_fp, os.path.getsize(local_fp))
         threading.Thread(target=self.api.upload, args=(task,)).start()
         return task
+
+    def md5(self, path):
+        """
+        获取文件的md5
+
+        :param path:
+        :return:
+        """
+        return self.api.get_md5(path)
+
+    def mkdir(self, path):
+        """
+        创建文件夹
+
+        :param path:
+        :return:
+        """
+        return self.api.mkdir(path)

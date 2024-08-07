@@ -1,5 +1,6 @@
 import asyncio
 import queue
+import threading
 import time
 from collections import deque
 from hashlib import md5 as hashlib_md5
@@ -33,9 +34,11 @@ class TempFs:
         return hashlib_md5(key.encode()).hexdigest()
 
     @staticmethod
-    async def remove_file_sync(file_path):
-        if os.path.exists(file_path):
-            os.remove(file_path)
+    def remove_file_sync(file_path):
+        def func():
+            if os.path.exists(file_path):
+                os.remove(file_path)
+        threading.Thread(target=func).start()
 
     def build_weight(self):
         """
@@ -185,14 +188,7 @@ class TempFs:
         if key not in self.meta:
             raise KeyError(f'key {driver_name} and {uid} not exists')
 
-        # self.remove_file_sync(self.meta[key]['path'])
-        # 获取当前事件循环，如果没有运行的事件循环则创建一个新的
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-        # 使用 asyncio.create_task 调度删除操作
-        loop.create_task(self.remove_file_sync(self.meta[key]['path']))
+        self.remove_file_sync(self.meta[key]['path'])
         self.meta['size'] -= self.meta[key]['size']
         self.weight.remove(key)
         del self.meta[key]

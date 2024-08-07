@@ -6,6 +6,7 @@
 # unmount函数用来卸载设备
 
 import ctypes
+import errno
 import os
 import threading
 
@@ -15,7 +16,7 @@ try:
     import _find_fuse_parts
 except ImportError:
     pass
-from fuse import Operations, _libfuse, FUSE
+from fuse import Operations, _libfuse, FUSE, FuseOSError
 from internal.fileSystem import fileSystem
 from log import logger
 
@@ -35,7 +36,7 @@ class CloudFS(Operations):
 
         logger.info(f"- fuse 4 cloud driver ({self.device.name}) -")
         self.avail, self.total_size, self.used = fileSystem.disk_quota(self.device)  # 初始化磁盘空间大小
-        fileSystem.readDirAsync(self.device, "/", PRELOAD_LEVEL)  # 预读根目录(默认深度为2)
+        fileSystem.preReadDir(self.device)  # 预读根目录(默认深度为2)
 
     def init(self, path):
         """
@@ -50,7 +51,6 @@ class CloudFS(Operations):
         self.device.status = DeviceStatus.MOUNTED  # 更改设备状态为挂载成功
         self.device.changeSignal.send("status_change", device=self.device)  # 发送状态改变信号
 
-    @logger.catch
     def getattr(self, path, fh=None):
         '''
         Returns a dictionary with keys identical to the stat C structure of
@@ -62,6 +62,7 @@ class CloudFS(Operations):
         concerning st_nlink of directories. Mac OS X counts all files inside
         the directory, while Linux counts only the subdirectories.
         '''
+
         return fileSystem.getattr(self.device, path, fh)
 
     @logger.catch
@@ -144,12 +145,14 @@ class CloudFS(Operations):
         删除文件
         '''
         # print("unlink .....................")
+        logger.info(f"unlink {path}")
         pass
 
     def rmdir(self, path):
         '''
         will only delete directory
         '''
+        logger.info(f"rmdir {path}")
         pass
 
     def access(self, path, amode):
@@ -161,38 +164,43 @@ class CloudFS(Operations):
         :param amode: 访问模式，可能的值包括 os.F_OK (存在性检查), os.R_OK (可读性检查), os.W_OK (可写性检查), 和 os.X_OK (可执行性检查)
         :return: 0 表示成功，-errno 表示失败
         """
-
         # 假设所有文件都是可访问的
         return 0
 
+    @logger.catch
     def rename(self, old, new):
         '''
         will effect dir and file
         '''
-        pass
+        return fileSystem.rename(self.device, old, new)
 
     @logger.catch
     def mkdir(self, path, mode):
         # TODO: 完善接口的上传等相关功能
-        pass
+        logger.info(f"mkdir {path}")
+        fileSystem.mkdir(self.device, path, mode)
 
+    @logger.catch
     def open(self, path, flags):
-        return 0
+        return fileSystem.open(self.device, path, flags)
 
+    @logger.catch
     def read(self, path, size, offset, fh):
         return fileSystem.read(self.device, path, size, offset, fh)
 
+    @logger.catch
     def release(self, path, fh):
-        return 0
+        return fileSystem.release(self.device, path, fh)
 
     @logger.catch
     def create(self, path, mode, fh=None):
-        pass
         # Todo
+        logger.info(f"create {path}")
+        pass
 
     def write(self, path, data, offset, fp):
-        pass
         # Todo： 写文件
+        return fileSystem.write(self.device, path, data, offset, fp)
 
     def statfs(self, path):
         # TODO read from cloud disk
@@ -212,7 +220,8 @@ def mount(device):
         device.status = DeviceStatus.WAIT_MOUNT
         device.changeSignal.send("status_change", device=device)  # 发送状态改变信号
         try:
-            FUSE(fs, device.path, foreground=False, nothreads=True, nonempty=False, async_read=False, raw_fi=False)
+            FUSE(fs, device.path, nothreads=True, foreground=True)
+            # FUSE(fs, device.path, foreground=False, nothreads=True, nonempty=False, async_read=False, raw_fi=False)
         except Exception as e:
             device.status = DeviceStatus.MOUNT_FAILED
             device.changeSignal.send("status_change", device=device)  # 发送状态改变信号
